@@ -1,8 +1,9 @@
-#define MAX_DEPOTS 1000
-#define INFINITY 32767
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#define MAX_DEPOTS 1000
+#define INFINITY INT_MAX
 
 typedef struct {
   int attacks;
@@ -92,6 +93,7 @@ void getStrategicValues(int* values, int size, int* results) {
   int i, j, k;
   int current;
   for(j = 0; j < size; j++) {
+    printf("%d ", values[j]);
     for(i = j+1; i < size; i++) {
       current = values[i];
       int sum = results[j * size + (i-1)];
@@ -101,6 +103,7 @@ void getStrategicValues(int* values, int size, int* results) {
       results[j * size + i] = sum;
     }
   }
+  printf("\ninitial strategic value: %d\n\n", results[size-1]);
 }
 
 void getOptimalValues(int size, int* values, int current_bomb, int total_bombs, int* optimalValues[total_bombs]) {
@@ -132,12 +135,13 @@ void getOptimalValues(int size, int* values, int current_bomb, int total_bombs, 
 }
 
 void lawrence(Dataset* inputs, int count) {
-  int i;
+  int i,k;
   for(i = 0; i < count; i++) {
     int size = inputs[i].depots;
     int *optimalValues[inputs[i].attacks];
     optimalValues[0] = (int *)malloc(sizeof(int)*size*size);
     initMatrix(size, optimalValues[0], 0);
+    printf("n = %d\nm = %d\n", inputs[i].depots, inputs[i].attacks);
     getStrategicValues(inputs[i].values, size, optimalValues[0]);
     getOptimalValues(size, inputs[i].values, 1, inputs[i].attacks, optimalValues);
     printf("=============================================\n\n");
