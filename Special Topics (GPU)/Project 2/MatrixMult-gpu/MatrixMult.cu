@@ -4,16 +4,18 @@
 
 float* initMatrix(int size);
 void saveMatrix(int size, float *matrix);
-__global__ void multiplyMatrices(int size, float *matrix1, float *matrix2, float *result);
+__global__ void multiplyMatrices(int size, float *matrix1, float *matrix2, float *result, int tile_width);
 
 int main(int argc, char *argv[]) {
-  if(argc != 2) {
-    printf("Error: You must provide the length of the columns/rows\n");
+  if(argc != 3) {
+    printf("Error: You must provide the length of the columns/rows followed by the tile width\n");
   }
   else {
     int size = atoi(argv[1]);
+    int tile_width = atoi(argv[2]);
+
     if(size >= 0) {
-        printf("Size: %d\n", size);
+        printf("Size: %d Tile size: %d\n", size, tile_width);
         clock_t start, stop;
         float *dev_matrix1, *dev_matrix2, *dev_results;
 
@@ -21,24 +23,48 @@ int main(int argc, char *argv[]) {
         float *matrix1 = initMatrix(size);
         float *matrix2 = initMatrix(size);
 
+        //Initialize device matrices
+        int total_size = size * size * sizeof(float);
+        cudaMalloc((void **) &dev_matrix1, total_size);
+        cudaMalloc((void **) &dev_matrix2, total_size);
+        cudaMalloc((void **) &dev_results, total_size);
+
+        //Copy matrices to device
+        cudaMemcpy(dev_matrix1, matrix1, total_size, cudaMemcpyHostToDevice);
+        cudaMemcpy(dev_matrix2, matrix2, total_size, cudaMemcpyHostToDevice);
+
+        dim3 dimBlock(tile_width, tile_width);
+        //Casting divisions to float, otherwise the result tends to be 0
+        dim3 dimGrid((int)ceil((float)size/(float)dimBlock.x), (int)ceil((float)size/(float)dimBlock.y));
+
+        //Execute the code once so that everything is initialized before meassuring
+        multiplyMatrices<<<dimGrid, dimBlock>>>(size, dev_matrix1, dev_matrix2, dev_results, tile_width);
+
         //Store the starting time
         start = clock();
 
         //Perform the matrix multiplication
-        float *results = multiplyMatrices(size, matrix1, matrix2);
+        multiplyMatrices<<<dimGrid, dimBlock>>>(size, dev_matrix1, dev_matrix2, dev_results, tile_width);
+        cudaThreadSynchronize();
 
         //Store the stopping time
         stop = clock();
 
+        float *results = (float *) malloc(total_size);
+        cudaMemcpy(results, dev_results, total_size, cudaMemcpyDeviceToHost);
+
         //Calculate the total elapsed time
         float elapsed_time = (float)(stop - start)/CLOCKS_PER_SEC;
-        printf("Elapsed Time: %2.4fs\n", elapsed_time);
+        printf("Elapsed Time: %2.8fs\n", elapsed_time);
 
         //Save the results matrix to a file and free the memory
         saveMatrix(size, results);
         free(matrix1);
         free(matrix2);
         free(results);
+        cudaFree(dev_matrix1);
+        cudaFree(dev_matrix2);
+        cudaFree(dev_results);
     } else {
         printf("Error: The size provided must be a positive number\n");
     }
@@ -83,17 +109,13 @@ void saveMatrix(int size, float *matrix) {
   }
 }
 
-float* multiplyMatrices(int size, float *matrix1, float *matrix2) {
-    int i, j, k;
-    float *results = (float *) malloc(sizeof(float) * size * size);
-    for (i = 0; i < size; i++) {
-        for (j = 0; j < size; j++) {
-            float sum = 0;
-            for (k = 0; k < size; k++) {
-                sum += (float) matrix1[i * size + k]*matrix2[k * size + j];
-            }
-            results[i * size + j] = sum;
-        }
+__global__ void multiplyMatrices(int size, float *matrix1, float *matrix2, float* results, int tile_width) {
+    int k, sum = 0;
+    int col = blockIdx.x*tile_width + threadIdx.x;
+    int row = blockIdx.y*tile_width + threadIdx.y;
+    if(col < size && row < size) {
+      for(k = 0; k < size; k++)
+        sum += matrix1[row * size + k] * matrix2[k * size + col];
+      results[row * size + col] = sum;
     }
-    return results;
 }
