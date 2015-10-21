@@ -1,4 +1,4 @@
 MCPi: MCPi.c
-		gcc MCPi.c -o MCPi
+		gcc MCPi.c -lm -o MCPi
 clean:
 	rm MCPi

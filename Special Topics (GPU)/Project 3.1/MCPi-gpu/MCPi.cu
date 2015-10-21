@@ -14,7 +14,7 @@ __global__ void calculatePoint(int* result, curandState_t* states, int total_dar
 
 int main(int argc, char *argv[]) {
   if(argc != 2) {
-    printf("Error: You must provide the length of the columns/rows followed by the tile width\n");
+    printf("Error: You must provide the number of tests to perform\n");
   }
   else {
     //Obtain the total darts to throw from the terminal
@@ -35,7 +35,9 @@ int main(int argc, char *argv[]) {
 
       //Obtain the number of blocks that are going to be needed for execution
       int neededBlocks = getNeededBlocks(total_darts);
+      //Initialize the values array with 0s
       values = (int*) malloc(sizeof(int) * 10);
+      initFrequencyArray(values, 10);
       //Initialize the dev_result variable to 0 by copying the host variable result
       cudaMemcpy(dev_result, &result, sizeof(int), cudaMemcpyHostToDevice);
       cudaMemcpy(dev_values, values, sizeof(int) * 10, cudaMemcpyHostToDevice);
@@ -53,12 +55,15 @@ int main(int argc, char *argv[]) {
       //Obtain the value of pi using the count of points inside the circle
       float pi = (float) ((float)result*4)/ (float) total_darts;
       printf("Estimated value of pi = %2.9f\n", pi);
+      //Save the random values histogram to a file
       saveArray(values, total_darts);
       //Free the previously allocated memory, because we care
       cudaFree(states);
       cudaFree(dev_result);
+      cudaFree(dev_values);
+      free(values);
     } else {
-        printf("Error: The size provided must be a positive number\n");
+        printf("Error: The number of tests provided must be a positive number\n");
     }
   }
   //Graceful
@@ -113,6 +118,7 @@ __global__ void calculatePoint(int* result, curandState_t* states, int total_dar
       //The point is inside the circle so the partial sum is increased
       atomicAdd(result, 1);
     }
+    //Access the position in the histogram where x and y are located and increase them by 1
     atomicAdd(&values[(int)floor(x*10)], 1);
     atomicAdd(&values[(int)floor(y*10)], 1);
   }
@@ -122,4 +128,3 @@ __global__ void initRandom(unsigned int seed, curandState_t* states) {
   //Initialize the currand using the desired
   curand_init(seed, threadIdx.x, 0, &states[threadIdx.x]);
 }
-
