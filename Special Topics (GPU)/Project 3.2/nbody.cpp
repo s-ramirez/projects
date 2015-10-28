@@ -4,7 +4,6 @@
 #include <time.h>
 
 #define N 9999     // number of bodies
-//#define N 9
 #define MASS 0     // row in array for mass
 #define X_POS 1    // row in array for x position
 #define Y_POS 2    // row in array for y position
@@ -38,12 +37,12 @@ int main(int argc, char **argv) {
   srand48(time(NULL));
   for (int i = 0; i < N; i++) {
     body[i][MASS] = 0.001;
-    body[i][X_POS] += drand48();
-    body[i][Y_POS] += drand48();
-    body[i][Z_POS] += drand48();
-    body[i][X_VEL] += drand48();
-    body[i][Y_VEL] += drand48();
-    body[i][Z_VEL] += drand48();
+    body[i][X_POS] = drand48();
+    body[i][Y_POS] = drand48();
+    body[i][Z_POS] = drand48();
+    body[i][X_VEL] = drand48();
+    body[i][Y_VEL] = drand48();
+    body[i][Z_VEL] = drand48();
   }
 
   // print out initial positions in PDB format
@@ -97,17 +96,15 @@ int main(int argc, char **argv) {
 	  if (r > 2.0) {
 	    // TODO: compute gravitational force between body i and x
       F = (float) (G*body[i][MASS]*body[x][MASS])/rr;
-      //printf("WHAT THE F?? %2.9f\n", F);
+
 	    // TODO: compute frictional force
       F += MU*drand48();
-      //printf("WHAT THE F + MU?? %2.9f\n", F);
 
 	    Fx_dir[x] += F * x_diff / r;  // resolve forces in x and y directions
 	    Fy_dir[x] += F * y_diff / r;  // and accumulate forces
 	    Fz_dir[x] += F * z_diff / r;  //
 	  } else {
 	    // if too close, weak anti-gravitational force
-      //printf("ELSE!\n");
 	    float F = G * 0.01 * 0.01 / r;
 	    Fx_dir[x] -= F * x_diff / r;  // resolve forces in x and y directions
 	    Fy_dir[x] -= F * y_diff / r;  // and accumulate forces
