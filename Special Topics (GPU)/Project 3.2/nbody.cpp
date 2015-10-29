@@ -74,7 +74,6 @@ int main(int argc, char **argv) {
     x_diff = body[x][X_POS] - body[i][X_POS];
     y_diff = body[x][Y_POS] - body[i][Y_POS];
     z_diff = body[x][Z_POS] - body[i][Z_POS];
-    //printf("i:%d, x: %d, x_diff:%2.2f y_diff:%2.2f z_diff:%2.2f\n",i, x, x_diff, y_diff, z_diff);
 
     // periodic boundary conditions
 	  if (x_diff <  -BOXL * 0.5) x_diff += BOXL;
