@@ -1,4 +1,4 @@
-nbody: nbody.cpp
-		g++ nbody.cpp -lm -o nbody
+nbody: nbody.cu
+		nvcc nbody.cu -lm -o nbody
 clean:
 	rm nbody
