@@ -33,6 +33,7 @@ int main(int argc, char **argv) {
     int file_size = 0;
     int file_read = 0;
     int num_syncs = 0;
+    int i;
 
     //Declare and allocate results arrays, one for each device
     int **results0 = (int**) malloc(NUM_STREAMS*sizeof(int*));
@@ -76,6 +77,12 @@ int main(int argc, char **argv) {
     //Initialize results buckets and the file reading buffer for first device
     initializeStreams(0, streams0, dev_count0, dev_read0);
     initializeStreams(1, streams1, dev_count1, dev_read1);
+    
+    //Initialize host results arrays
+    for(i = 0; i < NUM_STREAMS; i++) {
+      results0[i] = (int*) malloc(sizeof(int)*10);    
+      results1[i] = (int*) malloc(sizeof(int)*10);    
+    }    
 
     //Set the initial device
     int currentDevice = 0;
@@ -207,7 +214,6 @@ int executeCount(int device, cudaStream_t* streams, int file_size, int file_read
 
   for(i = 0; i < NUM_STREAMS; i++) {//Do the following for each stream in the set device
     //Asynchronously copy results from the stream back to the host
-    results[i] = (int*) malloc(sizeof(int)*10);
     cudaMemcpyAsync(results[i], dev_count[i], 10*sizeof(int), cudaMemcpyDeviceToHost, streams[i]);
   }
   return file_read; //Return the current number of read characters
