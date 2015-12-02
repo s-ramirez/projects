@@ -13,7 +13,8 @@ __global__ void countDigits(char *dev_read, int* dev_buckets, int size);
 void saveToFile(int** results0, int** results1);
 void syncStreams(int device, cudaStream_t* streams);
 void initializeStreams(int device, cudaStream_t* streams, int** dev_count, char** dev_read);
-int executeCount(int device, cudaStream_t* streams, int file_size, int file_read, char* buffer, int **dev_count, char **dev_read, FILE *file, int **results);
+void destroyStreams(int device, cudaStream_t* streams, char* buffer, int** dev_count, char** dev_read);
+int executeCount(int device, cudaStream_t* streams, int file_size, int file_read, char* buffer, int** dev_count, char** dev_read, FILE* file, int** results);
 
 int main(int argc, char **argv) {
 
@@ -42,15 +43,16 @@ int main(int argc, char **argv) {
     cudaStream_t* streams1 = (cudaStream_t*) malloc(NUM_STREAMS*sizeof(cudaStream_t));
 
     //Declare and allocate a set of buckets for counts and a reading buffer, one for each device
-    int **dev_count0 = (int **)malloc(NUM_STREAMS*sizeof(int));
-    char **dev_read0 = (char **)malloc(NUM_STREAMS*sizeof(char));
+    int **dev_count0 = (int **)malloc(NUM_STREAMS*sizeof(int*));
+    char **dev_read0 = (char **)malloc(NUM_STREAMS*sizeof(char*));
 
-    int **dev_count1 = (int **)malloc(NUM_STREAMS*sizeof(int));
-    char **dev_read1 = (char **)malloc(NUM_STREAMS*sizeof(char));
+    int **dev_count1 = (int **)malloc(NUM_STREAMS*sizeof(int*));
+    char **dev_read1 = (char **)malloc(NUM_STREAMS*sizeof(char*));
 
     //Execute the code once so that everything is initialized before meassuring
     initializeStreams(0, streams0, dev_count0, dev_read0);
     initializeStreams(1, streams1, dev_count1, dev_read1);
+    
     //Synchronize all streams
     //This shouldn't count in the total sync count since it's done in order to get a more precise meassure
     syncStreams(0, streams0);
@@ -100,6 +102,11 @@ int main(int argc, char **argv) {
 		fclose(file);
     //Save results to file
     saveToFile(results0, results1);
+    //Because we care, free all the used cuda variables and destroy the streams
+    cudaSetDevice(0);
+    destroyStreams(0, streams0, buffer0, dev_count0, dev_read0);
+    cudaSetDevice(1);
+    destroyStreams(1, streams1, buffer1, dev_count1, dev_read1);
     //Stop the timer and print the total elapsed time
     stop = clock();
     float elapsed_time = (float)(stop - start)/CLOCKS_PER_SEC;
@@ -126,6 +133,18 @@ void syncStreams(int device, cudaStream_t* streams) {
   //Synchronize the desired device
   cudaSetDevice(device);
   cudaDeviceSynchronize();
+}
+
+void destroyStreams(int device, cudaStream_t* streams, char* buffer, int** dev_count, char** dev_read) {
+  int i;
+  cudaSetDevice(device);
+  //Free all the variables associated to each stream in the desired device and destroy the stream
+  for(i = 0; i < NUM_STREAMS; i++) {
+    cudaFree(dev_read[i]);
+    cudaFree(dev_count[i]);
+    cudaStreamDestroy(streams[i]);
+  }
+  cudaFree(buffer);
 }
 
 void saveToFile(int** results0, int** results1) {
