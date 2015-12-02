@@ -28,66 +28,82 @@ int main(int argc, char **argv) {
     exit(-1);
   }
   else {
-      clock_t start, stop;
-			int file_size = 0;
-			int file_read = 0;
-      int num_syncs = 0;
+    clock_t start, stop;
+    int file_size = 0;
+    int file_read = 0;
+    int num_syncs = 0;
 
-      int **results0 = (int**) malloc(NUM_STREAMS*sizeof(int*));
-      int **results1 = (int**) malloc(NUM_STREAMS*sizeof(int*));
+    //Declare and allocate results arrays, one for each device
+    int **results0 = (int**) malloc(NUM_STREAMS*sizeof(int*));
+    int **results1 = (int**) malloc(NUM_STREAMS*sizeof(int*));
 
-      cudaStream_t* streams0 = (cudaStream_t*) malloc(NUM_STREAMS*sizeof(cudaStream_t));
-      cudaStream_t* streams1 = (cudaStream_t*) malloc(NUM_STREAMS*sizeof(cudaStream_t));
+    //Declare and allocate stream arrays, one for each device
+    cudaStream_t* streams0 = (cudaStream_t*) malloc(NUM_STREAMS*sizeof(cudaStream_t));
+    cudaStream_t* streams1 = (cudaStream_t*) malloc(NUM_STREAMS*sizeof(cudaStream_t));
 
-      int **dev_count0 = (int **)malloc(NUM_STREAMS*sizeof(int));
-      char **dev_read0 = (char **)malloc(NUM_STREAMS*sizeof(char));
+    //Declare and allocate a set of buckets for counts and a reading buffer, one for each device
+    int **dev_count0 = (int **)malloc(NUM_STREAMS*sizeof(int));
+    char **dev_read0 = (char **)malloc(NUM_STREAMS*sizeof(char));
 
-      int **dev_count1 = (int **)malloc(NUM_STREAMS*sizeof(int));
-      char **dev_read1 = (char **)malloc(NUM_STREAMS*sizeof(char));
+    int **dev_count1 = (int **)malloc(NUM_STREAMS*sizeof(int));
+    char **dev_read1 = (char **)malloc(NUM_STREAMS*sizeof(char));
 
-      //Execute the code once so that everything is initialized before meassuring
-      initializeStreams(0, streams0, dev_count0, dev_read0);
-      initializeStreams(1, streams1, dev_count1, dev_read1);
+    //Execute the code once so that everything is initialized before meassuring
+    initializeStreams(0, streams0, dev_count0, dev_read0);
+    initializeStreams(1, streams1, dev_count1, dev_read1);
+    //Synchronize all streams
+    //This shouldn't count in the total sync count since it's done in order to get a more precise meassure
+    syncStreams(0, streams0);
+    syncStreams(1, streams1);
 
-      //Start the timer
-      start = clock();
+    //Start the timer
+    start = clock();
 
-      //Obtain the file length
-      fseek(file, 0, SEEK_END);
-			file_size = ftell(file);
-			fseek(file, 0, SEEK_SET);
+    //Obtain the file length
+    fseek(file, 0, SEEK_END);
+		file_size = ftell(file);
+		fseek(file, 0, SEEK_SET);
 
-      //Allocate a page locked buffer for reading the file
-      char* buffer;
-      cudaHostAlloc((void **)&buffer, file_size*sizeof(char), cudaHostAllocDefault);
+    //Allocate a page locked buffer for reading the file for each device
+    char* buffer0, *buffer1;
+    cudaSetDevice(0);
+    cudaHostAlloc((void **)&buffer0, file_size*sizeof(char), cudaHostAllocDefault);
+    cudaSetDevice(1);
+    cudaHostAlloc((void **)&buffer1, file_size*sizeof(char), cudaHostAllocDefault);
 
-      //Initialize results buckets and the file reading buffer for first device
-      initializeStreams(0, streams0, dev_count0, dev_read0);
-      initializeStreams(1, streams1, dev_count1, dev_read1);
+    //Initialize results buckets and the file reading buffer for first device
+    initializeStreams(0, streams0, dev_count0, dev_read0);
+    initializeStreams(1, streams1, dev_count1, dev_read1);
 
-      int currentDevice = 0;
-      while(file_read < file_size) {
-        currentDevice = currentDevice % 2;
-        if(currentDevice == 0) {
-          file_read = executeCount(currentDevice, streams0, file_size, file_read, buffer,
-            dev_count0, dev_read0, file, results0);
-        } else {
-          file_read = executeCount(currentDevice, streams1, file_size, file_read, buffer,
-            dev_count1, dev_read1, file, results1);
-        }
-        currentDevice++;
-			}
-      syncStreams(0, streams0);
-      syncStreams(1, streams1);
-      num_syncs++;
-      printf("GPUs Synchronized %d\n", num_syncs);
-			fclose(file);
-      //Save results to file
-      saveToFile(results0, results1);
+    //Set the initial device
+    int currentDevice = 0;
 
-      stop = clock();
-      float elapsed_time = (float)(stop - start)/CLOCKS_PER_SEC;
-      printf("Elapsed Time: %2.8fs\n", elapsed_time);
+    while(file_read < file_size) { //While read characters are less than the total file size
+      currentDevice = currentDevice % 2; //Reinitialize the current device if greater than two (number of gpus)
+      //Execute a counting cicle using the set device and its associated values
+      if(currentDevice == 0) {
+        file_read = executeCount(currentDevice, streams0, file_size, file_read, buffer0,
+          dev_count0, dev_read0, file, results0);
+      } else {
+        file_read = executeCount(currentDevice, streams1, file_size, file_read, buffer1,
+          dev_count1, dev_read1, file, results1);
+      }
+      currentDevice++;
+		}
+    //After reading the whole file, synchronize all streams
+    syncStreams(0, streams0);
+    syncStreams(1, streams1);
+    //Increase and print the number of synchronizations
+    num_syncs++;
+    printf("GPUs Synchronized %d\n", num_syncs);
+    //Close the opened file
+		fclose(file);
+    //Save results to file
+    saveToFile(results0, results1);
+    //Stop the timer and print the total elapsed time
+    stop = clock();
+    float elapsed_time = (float)(stop - start)/CLOCKS_PER_SEC;
+    printf("Elapsed Time: %2.8fs\n", elapsed_time);
   }
   //Graceful
   exit(0);
@@ -96,21 +112,20 @@ int main(int argc, char **argv) {
 void initializeStreams(int device, cudaStream_t* streams, int** dev_count, char** dev_read) {
   int i;
   cudaSetDevice(device);
+  //Create each stream and its associated reading buffer and count buckets
   for(i = 0; i < NUM_STREAMS; i++) {
     cudaStreamCreate(&streams[i]);
     cudaMalloc((void**)&dev_read[i], N*sizeof(char));
     cudaMalloc((void**)&dev_count[i], 10*sizeof(int));
+    //Start each bucket in 0
     initCounts<<<10, 1, 0, streams[i]>>>(dev_count[i]);
   }
-  syncStreams(device, streams);
 }
 
 void syncStreams(int device, cudaStream_t* streams) {
-  int i;
+  //Synchronize the desired device
   cudaSetDevice(device);
-  for(i = 0; i < NUM_STREAMS; i++) {
-    cudaStreamSynchronize(streams[i]);
-  }
+  cudaDeviceSynchronize();
 }
 
 void saveToFile(int** results0, int** results1) {
@@ -147,39 +162,52 @@ int executeCount(int device, cudaStream_t* streams, int file_size, int file_read
   cudaSetDevice(device);
   int size[NUM_STREAMS], i;
 
-  for(i = 0; i < NUM_STREAMS; i++) {
-    if((file_size - (file_read + N)) < 0) {
-      size[i] = (int)file_size - file_read;
+  for(i = 0; i < NUM_STREAMS; i++) { //Do the following for each stream in the set device
+    if((file_size - (file_read + N)) < 0) { //If there are not N unread characters in the file
+      size[i] = file_size - file_read; //Read only the remaining characters
     } else {
-      size[i] = N;
+      size[i] = N;//Read N characters
     }
-    fread(&buffer[file_read], size[i], 1, file);
+    fread(&buffer[file_read], size[i], 1, file);//Read a chunk of 'size' into the device's buffer at the current position
+    //Begin copying asynchronously this buffer into the current stream
     cudaMemcpyAsync(dev_read[i], buffer+file_read, size[i]*sizeof(char), cudaMemcpyHostToDevice, streams[i]);
+    //Increment the amount of read characters by the size determined before
     file_read += size[i];
+    if(size[i] != N) { //Don't go further to other streams if there is nothing else to read
+      break;
+    }
   }
 
-  for(i = 0; i < NUM_STREAMS; i++) {
+  for(i = 0; i < NUM_STREAMS; i++) {//Do the following for each stream in the set device
+    //Count the digits in the current's stream chunk of read characters
     countDigits<<<size[i], 1, 0, streams[i]>>>(dev_read[i], dev_count[i], size[i]);
+    if(size[i] != N) { //Don't go further to other streams if there is nothing else to read
+      break;
+    }
   }
 
-  for(i = 0; i < NUM_STREAMS; i++) {
+  for(i = 0; i < NUM_STREAMS; i++) {//Do the following for each stream in the set device
+    //Asynchronously copy results from the stream back to the host
     results[i] = (int*) malloc(sizeof(int)*10);
     cudaMemcpyAsync(results[i], dev_count[i], 10*sizeof(int), cudaMemcpyDeviceToHost, streams[i]);
   }
-  return file_read;
+  return file_read; //Return the current number of read characters
 }
 
 __global__ void initCounts(int* dev_buckets) {
+  //Initialize each count in 0
   int position = blockIdx.x;
   dev_buckets[position] = 0;
 }
 
 __global__ void countDigits(char *dev_read, int* dev_buckets, int size) {
+  //Use a derivation of "Bucket sort" to count each digit from the chunk of read bytes
   int position = blockIdx.x;
   if(position < size){
-    int value = dev_read[position] - '0';
-    if(value >= 0) {
-      atomicAdd(&dev_buckets[value], 1);
+    //Each thread gets one character from the reading buffer
+    int value = dev_read[position] - '0'; //Substract '0' in order to obtain the int representation of the character
+    if(value >= 0) { //If the obtained representation is below 0 it might be an empty space or line break, then ignore
+      atomicAdd(&dev_buckets[value], 1); //Use an atomic operation to increase the character's bucket
     }
   }
 }
