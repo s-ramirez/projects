@@ -29,8 +29,8 @@ from sklearn.svm import SVC
 import numpy as np
 clf = SVC(kernel="rbf", C=10000)
 
-#features_train = features_train[:len(features_train)/100]
-#labels_train = labels_train[:len(labels_train)/100]
+features_train = features_train[:len(features_train)/100]
+labels_train = labels_train[:len(labels_train)/100]
 
 t0 = time()
 clf.fit(features_train, labels_train)
@@ -44,6 +44,7 @@ print "prediction time:", round(time()-t1, 3), "s"
 #print ("50:", prediction[50])
 count = np.array(prediction)
 print (count == 1).sum()
-
-#print accuracy_score(prediction, labels_test)
+print prediction
+print labels_test
+print accuracy_score(prediction, labels_test)
 #########################################################
