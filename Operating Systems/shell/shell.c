@@ -108,9 +108,12 @@ char *read_input() {
           write(2, "\10", 2); // Left
         }
 				break;
-	    	/*case BACKSPACE:
-	      	write(2, "\10\33[1P", 5);
-				break;*/
+	    	case BACKSPACE:
+					if(position > 0) {
+	      		write(2, "\10\33[1P", 5);
+						position--;
+					}
+				break;
 	    	case DELETE:
 	        write(2, "\33[1P", 4);
 	    	break;
