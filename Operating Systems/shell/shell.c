@@ -15,6 +15,11 @@
 #define DELETE '~'
 #define ENTER '\n'
 
+struct Process {
+	char **args;
+	Process *pipe;
+};
+
 // Builtin CD function
 int change_dir(char **args)
 {
@@ -38,11 +43,11 @@ int run_process(char **args) {
 	if(pid == 0) {
 		// Child process
 		if (execvp(args[0], args) == -1) {
-			perror("shell");
+			perror("Exec");
 		}
 		exit(EXIT_FAILURE);
 	} else if(pid < 0) {
-		perror("shell");
+		perror("Fork");
 	} else {
 		do {
       wpid = waitpid(pid, &status, WUNTRACED);
@@ -84,6 +89,27 @@ char **process_input(char *line){
 	return tokens;
 }
 
+Process *process_pipes(char *line) {
+	char *command;
+	Process *lastProcess = NULL;
+
+	command = strtok(line, '|');
+	while(command != NULL) {
+		Process *proc = malloc(sizeof(Process));
+		proc.args = process_input(token);
+
+		if(lastProcess == NULL) {
+			lastProcess = proc;
+		} else {
+			proc.pipe = lastProcess;
+			lastProcess = proc;
+		}
+
+		command = strtok(line, '|');
+	}
+	return
+}
+
 // Read the users input
 char *read_input() {
 	char *line = (char*) malloc(sizeof(char)*MAX_INPUT_SIZE);
@@ -119,6 +145,8 @@ char *read_input() {
 	    	break;
 				case ENTER:
 					line[position] = '\0';
+					printf("\n");
+					fflush(stdout);
 					return line;
 				break;
 				default:
@@ -134,7 +162,7 @@ char *read_input() {
 void input_loop() {
 	int status;
 	char *line;
-	char ** tokens;
+	char **tokens;
 
 	struct termios termios_p;
 	struct termios termios_save;
@@ -164,8 +192,7 @@ void input_loop() {
 		fflush(stdout);
 		// Read the user's input
 		line = read_input();
-		printf("\n");
-		fflush(stdout);
+
 		// Parse input
 		tokens = process_input(line);
 		// Execute commands
