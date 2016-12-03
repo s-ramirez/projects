@@ -9,6 +9,8 @@
 #define PATH_COLOR "\x1b[1;34m"
 #define COLOR_RESET   "\x1b[0m"
 #define MAX_INPUT_SIZE 256
+#define READ 0
+#define WRITE 1
 
 #define ESCAPE '\33'
 #define BACKSPACE '\177'
@@ -17,7 +19,7 @@
 
 struct Process {
 	char **args;
-	Process *pipe;
+	struct Process *pipe;
 };
 
 // Builtin CD function
@@ -57,57 +59,59 @@ int run_process(char **args) {
 }
 
 // Execute command
-int execute_command(char **args) {
-	if(args[0] == NULL) {
-		// Ignore an empty command
+int execute_command(struct Process *proc) {
+	pid_t pid;
+	int f_des[2];
+
+	if()
+	if (pipe(f_des) == -1) {
+		perror("Pipe");
 		return 1;
 	}
-
-	if(strcmp(args[0], "cd") == 0) {
-		// If the user wants a change of directory
-		return change_dir(args);
+	switch(fork()){
+		case -1:
+			perror("Pipe");
+		return 1;
+		case 0: //Child
+			dup2(f_des[WRITE], fileno(stdout))
 	}
-
-	return run_process(args);
 }
+
+// if(strcmp(args[0], "cd") == 0) {
+// 	// If the user wants a change of directory
+// 	return change_dir(args);
+// }
 
 // Process user input
-char **process_input(char *line){
-	int position = 0;
-	char **tokens = malloc(MAX_INPUT_SIZE * sizeof(char*));
+struct Process *process_input(char *line) {
+	int position;
 	char *token;
+	struct Process *newProc;
+	struct Process *proc = malloc(sizeof(struct Process));
+	proc->args = malloc(sizeof(line));
 
-	// VALIDAR malloc
-	token = strtok(line, " \t");
+	token = strtok(line, " ");
 	while(token != NULL) {
-		tokens[position] = token;
-		position++;
+		switch(token[0]) {
+			case '|':
+				newProc = malloc(sizeof(struct Process));
+				newProc->pipe = proc;
+				newProc->args = malloc(sizeof(line));
 
-		token = strtok(NULL, " \t");
-	}
-	tokens[position] = NULL;
-	return tokens;
-}
-
-Process *process_pipes(char *line) {
-	char *command;
-	Process *lastProcess = NULL;
-
-	command = strtok(line, '|');
-	while(command != NULL) {
-		Process *proc = malloc(sizeof(Process));
-		proc.args = process_input(token);
-
-		if(lastProcess == NULL) {
-			lastProcess = proc;
-		} else {
-			proc.pipe = lastProcess;
-			lastProcess = proc;
+				proc = newProc;
+				position = 0;
+			break;
+			case '>':
+				// redirect to file
+			break;
+			default:
+				proc->args[position] = token;
+				position++;
+			break;
 		}
-
-		command = strtok(line, '|');
+		token = strtok(NULL, " ");
 	}
-	return
+	return proc;
 }
 
 // Read the users input
@@ -157,12 +161,13 @@ char *read_input() {
 			}
 		}
 	}
+	return line;
 }
 
 void input_loop() {
 	int status;
 	char *line;
-	char **tokens;
+	struct Process *commands;
 
 	struct termios termios_p;
 	struct termios termios_save;
@@ -184,7 +189,7 @@ void input_loop() {
 	tcsetattr(0,TCSANOW, &termios_p);
 
 	do {
-		if(USER != NULL && HOST != NULL){
+		if(USER != NULL){
 			printf(USER_COLOR "%s" COLOR_RESET ":" PATH_COLOR "%s" COLOR_RESET " $ ", USER, HOST);
 		} else {
 			printf("$ ");
@@ -192,14 +197,21 @@ void input_loop() {
 		fflush(stdout);
 		// Read the user's input
 		line = read_input();
-
+		printf("line: %s\n", line);
+		fflush(stdout);
 		// Parse input
-		tokens = process_input(line);
+		commands = process_input(line);
+		while(commands != NULL) {
+			printf("Args: %s %s\n", commands->args[0], commands->args[1]);
+			fflush(stdout);
+			commands = commands->pipe;
+		}
+
 		// Execute commands
-		status = execute_command(tokens);
+		// status = execute_command(commands);
 
 		free(line);
-		free(tokens);
+		free(commands);
 	} while(status);
 	// Return the terminal's state to the original
 	tcsetattr(0,TCSANOW, &termios_save);
