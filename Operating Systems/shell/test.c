@@ -1,40 +1,78 @@
-#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <errno.h>
 
-#define READ_END 0
-#define WRITE_END 1
+#define READ 0
+#define WRITE 1
 
-int
-main(int argc, char* argv[])
+int test() {
+  int pipe1[2];
+  pipe(pipe1);
+  // Child process
+  if(fork() > 0) {
+      // Parent
+      dup2(pipe1[READ], READ);
+      close(pipe1[READ]);
+      close(pipe1[WRITE]);
+      return execlp("grep", "grep", "ps", NULL);
+      //exit(EXIT_FAILURE);
+  } else {
+    // Child
+    dup2(pipe1[WRITE], WRITE);
+    close(pipe1[WRITE]);
+    close(pipe1[READ]);
+    return execlp("ps", "ps", "-A", NULL);
+    //exit(EXIT_FAILURE);
+  }
+}
+
+int main(int argc, char* argv[])
 {
     pid_t pid;
-    int fd[2];
+    int pipe1[2], status;
 
-    pipe(fd);
-    pid = fork();
-
-    if(pid==0)
-    {
-        printf("i'm the child used for ls \n");
-        dup2(fd[WRITE_END], STDOUT_FILENO);
-        close(fd[WRITE_END]);
-        execlp("ps", "ps", "-A", NULL);
+  	pid = fork();
+  	if(pid < 0)
+  			perror("Fork");
+  	else if(pid == 0){
+			test();
     }
-    else
-    {
-        pid=fork();
-
-        if(pid==0)
-        {
-            printf("i'm in the second child, which will be used to run grep\n");
-            dup2(fd[READ_END], STDIN_FILENO);
-            close(fd[READ_END]);
-            execlp("grep", "grep", "Finder",NULL);
-        }
+    else {
+      do {
+          //close(pipe1[WRITE]);
+          //close(pipe1[READ]);
+          waitpid(pid, &status, WUNTRACED);
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
     }
+  	return 1;
+
+    // pipe(fd);
+    // pid = fork();
+    //
+    // if(pid==0)
+    // {
+    //     printf("i'm the child used for ls \n");
+    //     dup2(fd[WRITE], STDOUT_FILENO);
+    //     close(fd[WRITE]);
+    //     close(fd[READ]);
+    //     execlp("ps", "ps", "-A", NULL);
+    // }
+    // else
+    // {
+    //     pid=fork();
+    //
+    //     if(pid==0)
+    //     {
+    //         printf("i'm in the second child, which will be used to run grep\n");
+    //         dup2(fd[READ], STDIN_FILENO);
+    //         close(fd[READ]);
+    //         close(fd[WRITE]);
+    //         execlp("grep", "grep", "ps", NULL);
+    //     }
+    // }
 
     return 0;
 }

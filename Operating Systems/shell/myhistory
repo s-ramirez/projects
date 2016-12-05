@@ -1,0 +1,92 @@
+ps -A
+ls
+ps -A
+ps -A | grep 'a'
+ps -A
+ps -A | grep 'a'
+ls
+ls
+ps -A
+ps -A | grep 'ps'
+ls
+ps -A
+ls
+ps -A
+ps
+ls
+ls | grep 'a'
+ps
+ps -A
+ps -A | grep 'a'
+ps -A 
+ps -A | grep 'a'
+ps -A
+ps -A | grep 'a'
+ps -A | grep 'a'
+ps -A | grep
+ps -A | grep 'ps'
+ps -a | grep 'a'
+ps -A | grep 'ps'
+ps -A
+ps -A | grep 'ps'
+ps -A | grep 'ps'
+ps | a
+ps -A | grep
+ps -A | grep 'a'
+ps -A | grep 'a'
+ps -A | grep 'a'
+ps -A | grep 'a'
+ps -A | grep 'a'
+ps -a | grep 'aA | grep 'a'
+ps -A | grep 'a'
+ps -A | grep 'a'
+ps -A | grep 'ps'
+ps -A | grep 'a'
+ps -A | grep 'a'
+ps -A | grep 'a'
+ps -A | grep 'ps'
+ps -A | grep 'ps'
+ps -A | grep 'A'
+ps -A
+ls
+ls | grep 'a'
+ls
+ps -A | grep 'ps'
+ps -A 
+ps -A | grep 'a'
+ps -A | grep 'a'
+ps -a | grep 'ps'
+ps -A | grep 'a'
+ps -A | grep 'a'
+ps -A | grep 'a'
+ps -A | grep 'ps'
+l
+sl
+sl
+s
+sll
+sl
+sl
+sl
+s
+lll
+s
+
+s
+
+slsllasdd
+la
+ls
+ll
+as
+ps -A | grep 'ps'
+ps -a | grep 'ps'
+l
+sl
+sl
+ss
+ll
+ls | wc
+ls | grep a | wc
+ls | grep a
+ls | grep a | wc

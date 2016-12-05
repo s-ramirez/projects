@@ -9,6 +9,7 @@
 #define PATH_COLOR "\x1b[1;34m"
 #define COLOR_RESET   "\x1b[0m"
 #define MAX_INPUT_SIZE 256
+
 #define READ 0
 #define WRITE 1
 
@@ -35,25 +36,36 @@ int change_dir(char **args)
   return 1;
 }
 
-
 // Start a new process
-int run_process(char **args) {
-	pid_t pid, wpid;
-	int status;
+int run_process(struct Process *proc) {
+	struct Process *tmp;
+	int f_des[2];
+	pid_t pid;
 
-	pid = fork();
-	if(pid == 0) {
-		// Child process
-		if (execvp(args[0], args) == -1) {
-			perror("Exec");
-		}
-		exit(EXIT_FAILURE);
-	} else if(pid < 0) {
-		perror("Fork");
+	if(proc->pipe == NULL) {
+		return execvp(proc->args[0], proc->args);
 	} else {
-		do {
-      wpid = waitpid(pid, &status, WUNTRACED);
-    } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+		pipe(f_des);
+		switch(fork()) {
+			case -1:
+				perror("Fork");
+				return -1;
+			break;
+			case 0:
+				// Child process
+				dup2(f_des[WRITE], WRITE);
+				close(f_des[WRITE]);
+        close(f_des[READ]);
+				return run_process(proc->pipe);
+			break;
+			default:
+				// Parent process
+				dup2(f_des[READ], READ);
+				close(f_des[READ]);
+				close(f_des[WRITE]);
+				return execvp(proc->args[0], proc->args);
+			break;
+		}
 	}
 	return 1;
 }
@@ -61,20 +73,25 @@ int run_process(char **args) {
 // Execute command
 int execute_command(struct Process *proc) {
 	pid_t pid;
-	int f_des[2];
+	int status;
 
-	if()
-	if (pipe(f_des) == -1) {
-		perror("Pipe");
-		return 1;
-	}
-	switch(fork()){
+	pid = fork();
+	switch(pid) {
 		case -1:
-			perror("Pipe");
-		return 1;
-		case 0: //Child
-			dup2(f_des[WRITE], fileno(stdout))
+			perror("Fork");
+		break;
+		case 0:
+			// Child process
+			return run_process(proc);
+		break;
+		default:
+			// Parent process
+			do {
+				waitpid(pid, &status, WUNTRACED);
+			} while (!WIFEXITED(status) && !WIFSIGNALED(status));
+		break;
 	}
+	return 1;
 }
 
 // if(strcmp(args[0], "cd") == 0) {
@@ -167,7 +184,8 @@ char *read_input() {
 void input_loop() {
 	int status;
 	char *line;
-	struct Process *commands;
+	struct Process *commands, *temp;
+	FILE *history;
 
 	struct termios termios_p;
 	struct termios termios_save;
@@ -188,6 +206,9 @@ void input_loop() {
 	// Set terminal to the version with the new flags immediately
 	tcsetattr(0,TCSANOW, &termios_p);
 
+	// Open the history file
+	history = fopen("myhistory", "a");
+
 	do {
 		if(USER != NULL){
 			printf(USER_COLOR "%s" COLOR_RESET ":" PATH_COLOR "%s" COLOR_RESET " $ ", USER, HOST);
@@ -197,23 +218,27 @@ void input_loop() {
 		fflush(stdout);
 		// Read the user's input
 		line = read_input();
-		printf("line: %s\n", line);
+		fprintf(history, "%s\n", line);
+		fflush(history);
 		fflush(stdout);
 		// Parse input
 		commands = process_input(line);
-		while(commands != NULL) {
-			printf("Args: %s %s\n", commands->args[0], commands->args[1]);
-			fflush(stdout);
-			commands = commands->pipe;
-		}
 
 		// Execute commands
-		// status = execute_command(commands);
+		status = execute_command(commands);
 
 		free(line);
-		free(commands);
+
+		while(commands != NULL) {
+			temp = commands;
+			commands = commands->pipe;
+
+			free(temp->args);
+			free(temp);
+		}
 	} while(status);
 	// Return the terminal's state to the original
+	fclose(history);
 	tcsetattr(0,TCSANOW, &termios_save);
 }
 
