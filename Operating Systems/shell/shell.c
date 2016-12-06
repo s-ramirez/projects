@@ -106,19 +106,18 @@ struct Process *process_input(char *line) {
 	struct Process *newProc;
 	struct Process *proc = (struct Process*) malloc(sizeof(struct Process));
 	proc->argc = 0;
-	proc->args = (char**) malloc(1*sizeof(char));
+	proc->args = (char**) malloc(MAX_INPUT_SIZE*sizeof(char));
 	token = strtok(line, " ");
 	while(token != NULL) {
 		switch(token[0]) {
 			case '|':
 				proc->argc++;
-				proc->args = realloc(proc->args, proc->argc*sizeof(char));
 				proc->args[position] = '\0';
 
 				newProc = (struct Process*) malloc(sizeof(struct Process));
 				newProc->pipe = proc;
 				newProc->argc = 0;
-				newProc->args = (char**) malloc(1*sizeof(char));
+				newProc->args = (char**) malloc(MAX_INPUT_SIZE*sizeof(char));
 
 				proc = newProc;
 				position = 0;
@@ -128,14 +127,12 @@ struct Process *process_input(char *line) {
 			break;
 			default:
 				proc->argc++;
-				proc->args = realloc(proc->args, proc->argc*sizeof(char));
 				proc->args[position] = token;
 				position++;
 			break;
 		}
 		token = strtok(NULL, " ");
 	}
-	proc->args = realloc(proc->args, proc->argc*sizeof(char));
 	proc->args[position] = '\0';
 	return proc;
 }

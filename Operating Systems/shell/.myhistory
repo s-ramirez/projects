@@ -142,3 +142,10 @@ ls
 ls | grep a
 ls | grep a | wc
 ls | grep a | wc | sort
+git push origin master
+git push origin master
+ls
+ps -A | grep atom
+git push origin master
+git add .
+git commit -a -m test
