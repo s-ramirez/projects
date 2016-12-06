@@ -45,6 +45,8 @@ char history[1000][MAX_INPUT_SIZE];
 int history_count = 0;
 
 void read_history(FILE *fp) {
+	rewind(fp);
+	history_count = 0;
 	while(fgets(history[history_count], MAX_INPUT_SIZE, fp)) {
     history_count++;
 	}
@@ -55,18 +57,47 @@ int print_history() {
 	return 2;
 }
 
-int execute_history(int position) {
-	struct Process *commands;
-
+char* get_history(int position) {
+	position--;
 	if(position > history_count || position < 0) {
-		perror("History");
-	} else {
-		printf("%s", history[position]);
+		printf("Index out of range\n");
 		fflush(stdout);
-		commands = process_input(history[position]);
-		execute_command(commands);
+		exit(1);
+	} else {
+		return history[position];
 	}
-	return 2;
+}
+
+char* check_history(char* line) {
+	int pos, found_pos, i;
+	char substr[MAX_INPUT_SIZE];
+	char *cmd, *tmp;
+
+	// Check for history commands
+	for(pos = 0; line[pos] != '\0'; pos++) {
+		if(line[pos] == '!') {
+			tmp = (char*) malloc(sizeof(char) * MAX_INPUT_SIZE);
+			pos++;
+			found_pos = pos;
+			while(line[pos] != ' ' && line[pos] != '\0' && line[pos] != '\n') {
+				substr[pos-found_pos] = line[pos];
+				pos++;
+			}
+			cmd = get_history(atoi(substr));
+			// Copy first half
+			found_pos--;
+			for(i = 0; i < found_pos; i++)
+				tmp[i] = line[i];
+			// Copy from history
+			for(i = 0; i < strlen(cmd)-1; i++)
+				tmp[found_pos+i] = cmd[i];
+			// Copy second half
+			for(i = found_pos+i; pos < strlen(line); pos++ && i++)
+				tmp[i] = line[pos];
+			return tmp;
+		}
+	}
+	return line;
 }
 
 int run(char **args) {
@@ -75,10 +106,6 @@ int run(char **args) {
 		return change_dir(args);
 	} else if (strcmp(args[0], "history") == 0){
 		return print_history();
-	} else if (args[0][0] == '!'){
-    memmove(args[0], args[0]+1, strlen(args[0]));
-		int command = atoi(args[0]);
-		execute_history(command);
 	} else {
 		return execvp(args[0], args);
 	}
@@ -153,6 +180,7 @@ struct Process *process_input(char *line) {
 	while(token != NULL) {
 		switch(token[0]) {
 			case '|':
+				// Pipe
 				proc->argc++;
 				proc->args[position] = '\0';
 
@@ -165,10 +193,10 @@ struct Process *process_input(char *line) {
 				position = 0;
 			break;
 			case '>':
-				// redirect to file
+				// Redirect output to file
 			break;
 			case '<':
-				// redirect input
+				// Redirect input to file
 			break;
 			default:
 				proc->argc++;
@@ -198,7 +226,7 @@ int read_input(char* line) {
 				read(0, &buffer, 1);
 
 				if(buffer == 'A') { // Up arrow
-					if(history_nav -1 > 0) {
+					if(history_nav -1 >= 0) {
 						history_nav--;
 
 						while(position > 0) {
@@ -228,6 +256,8 @@ int read_input(char* line) {
 							write(2, &line[i], 1);
 						}
 						position++;
+					} else if(history_nav + 1 == history_count) {
+						history_nav = history_count;
 					}
         }
 				break;
@@ -261,7 +291,7 @@ void input_loop() {
 	int status;
 	char *line = (char*) malloc(sizeof(char)*MAX_INPUT_SIZE);
 	struct Process *commands, *temp;
-	FILE *history;
+	FILE *history_file;
 
 	struct termios termios_p;
 	struct termios termios_save;
@@ -283,8 +313,8 @@ void input_loop() {
 	tcsetattr(0,TCSANOW, &termios_p);
 
 	// Open the history file
-	history = fopen(".myhistory", "a+");
-	read_history(history);
+	history_file = fopen(".myhistory", "a+");
+	read_history(history_file);
 
 	do {
 		if(USER != NULL){
@@ -297,18 +327,18 @@ void input_loop() {
 		read_input(line);
 		fflush(stdout);
 
+		// Check for commands from history
+		line = check_history(line);
+
+		fprintf(history_file, "%s\n", line);
+		fflush(history_file);
+		read_history(history_file);
 		// Parse input
 		commands = process_input(line);
 
 		// Execute commands
 		status = execute_command(commands);
 
-		// Write to file
-		if(status == 2) {
-			fprintf(history, "%s\n", line);
-			fflush(history);
-		}
-		int i;
 		while(commands != NULL) {
 			temp = commands;
 			commands = commands->pipe;
@@ -318,7 +348,7 @@ void input_loop() {
 		}
 	} while(status);
 	// Return the terminal's state to the original
-	fclose(history);
+	fclose(history_file);
 	tcsetattr(0,TCSANOW, &termios_save);
 }
 

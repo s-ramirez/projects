@@ -18,14 +18,12 @@ int test() {
       close(pipe1[READ]);
       close(pipe1[WRITE]);
       return execlp("grep", "grep", "ps", NULL);
-      //exit(EXIT_FAILURE);
   } else {
     // Child
     dup2(pipe1[WRITE], WRITE);
     close(pipe1[WRITE]);
     close(pipe1[READ]);
     return execlp("ps", "ps", "-A", NULL);
-    //exit(EXIT_FAILURE);
   }
 }
 
@@ -42,8 +40,6 @@ int main(int argc, char* argv[])
     }
     else {
       do {
-          //close(pipe1[WRITE]);
-          //close(pipe1[READ]);
           waitpid(pid, &status, WUNTRACED);
         } while (!WIFEXITED(status) && !WIFSIGNALED(status));
     }

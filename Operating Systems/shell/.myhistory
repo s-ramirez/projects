@@ -1,180 +1,18 @@
 ps -A | grep ps
 ls
-ps -A | grep ps
-ls
-ps -A | grep ps
-ls
-ps
-s
-ls
-ps -A | grep ps
-ls
-ps -A | grep ps
-ls
-ps -A | grep ps
-ls
-reset
-ps -A | grep ps
-ls
-ps -A | grep ps
-ls
-git add .
-git commit -a -m "Testing shell"
-ls | wc
-ls
-wx
-wc
-cat shell.c
-ps -A
-ps
-ps -A | grep ps
-ps -A
-ps -A
-ps -A
-ps -A | grep ps
-ls
-ps -A
-ls
-ps -A
-ls
-ls
-ls
-ls
-ls
-ps
-ls
-ps -A | grep ps
-ls
-ps -A | grep ps
-ls
-ps -A | grep ps
-ls
-ps -A
-ps -A
-l
-ls
-clear
-ls
-ps -A
-ls
-cat shell.c | grep 'line'
-cat shell.c | grep line
-ls
-ps -A | grep ps
-git pull
-ls
-git status
-git commit
-ls
-ps -A
-ps | grep atom
-ps -A
-ps -A | grep ps
-ls
-ps -A
-ls
-ps -A
-ps
-pwd
-pwd
-ps
-ps -A
-pwd
-ps -A
-psw
-ps
-ps -A
-ps -A | grep ps
-ls
-ps -A
-ps -A | grep ps
-ls
-ps -A | grep ps
-ls
-ps -A | grep ps
-ls
-ps -A
-ps -A | grep atom
-ls
-ps -A | grep atom
-ls
-pwd
-ls
-ps -A | grep atom
-ps
-ls
-ps -A | grep atom
-ls
-ps -A
-ps -a | grep atom
-ls
-ps -A | grep atom
-ls
-ps -A | grep atom
-ps -A | grep ps
-ps -A | grep atom
-ps
-ps -a | grep atom
-ls
-ps -A | grep atom
-ls
-ps -A | grep atom
-ls
-git status
-git add .
-git add .
-git commit -a -m test
-git push origin master
-git status
-status
-ls
-ps -a
-ps
-ls
-ps -A
-ls
-git add .
-ps
-ps | grep atom
-ls
-ls | grep a
-ls | grep a | wc
-ls | grep a | wc | sort
-git push origin master
-git push origin master
-ls
-ps -A | grep atom
-git push origin master
-git add .
-git commit -a -m test
-git push origin master
-cd ..
-pwd
-cd shell
 pwd
 ps -A | grep ps
-ps -A | grep ps | wc
 history
 history
+ps -A | grep ps
 history
-history
-history
-history
-!12
-!100
-!120
-!100
+ls
 pwd
-pwd | grep a
-historu
-history
-100
-history
-169
-169
-169
+pwd
+ls
 history
 history
+ls
+pwd
 history
-166
-history
+ls
