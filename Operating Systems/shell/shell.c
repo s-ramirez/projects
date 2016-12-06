@@ -155,11 +155,11 @@ int read_input(char* line) {
           write(2, "up", 2); // Up
         } else if(buffer == 'B') {
 					write(2, "down", 4); // Down
-        } else if(buffer == 'C') {
-          write(2, "\33[C", 3); // Right
-        } else if(buffer == 'D') {
-          write(2, "\10", 2); // Left
-        }
+        // } else if(buffer == 'C') {
+        //   write(2, "\33[C", 3); // Right
+        // } else if(buffer == 'D') {
+        //   write(2, "\10", 2); // Left
+        // }
 				break;
 	    	case BACKSPACE:
 					if(position > 0) {

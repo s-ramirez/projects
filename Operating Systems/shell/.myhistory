@@ -149,3 +149,4 @@ ps -A | grep atom
 git push origin master
 git add .
 git commit -a -m test
+git push origin master
