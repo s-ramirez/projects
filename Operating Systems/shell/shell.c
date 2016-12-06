@@ -105,9 +105,8 @@ struct Process *process_input(char *line) {
 	char *token;
 	struct Process *newProc;
 	struct Process *proc = (struct Process*) malloc(sizeof(struct Process));
-	proc->argc = 1;
-	proc->args = (char**) malloc(proc->argc*sizeof(char));
-
+	proc->argc = 0;
+	proc->args = (char**) malloc(1*sizeof(char));
 	token = strtok(line, " ");
 	while(token != NULL) {
 		switch(token[0]) {
@@ -118,8 +117,8 @@ struct Process *process_input(char *line) {
 
 				newProc = (struct Process*) malloc(sizeof(struct Process));
 				newProc->pipe = proc;
-				newProc->argc = 1;
-				newProc->args = (char**) malloc(proc->argc*sizeof(char));
+				newProc->argc = 0;
+				newProc->args = (char**) malloc(1*sizeof(char));
 
 				proc = newProc;
 				position = 0;
@@ -136,7 +135,6 @@ struct Process *process_input(char *line) {
 		}
 		token = strtok(NULL, " ");
 	}
-	proc->argc++;
 	proc->args = realloc(proc->args, proc->argc*sizeof(char));
 	proc->args[position] = '\0';
 	return proc;

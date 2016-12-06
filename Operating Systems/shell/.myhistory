@@ -126,3 +126,19 @@ git status
 git add .
 git add .
 git commit -a -m test
+git push origin master
+git status
+status
+ls
+ps -a
+ps 
+ls
+ps -A
+ls
+git add .
+ps
+ps | grep atom
+ls
+ls | grep a
+ls | grep a | wc
+ls | grep a | wc | sort
