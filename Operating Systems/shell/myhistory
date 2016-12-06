@@ -90,3 +90,6 @@ ls | wc
 ls | grep a | wc
 ls | grep a
 ls | grep a | wc
+ps -A
+ps -A | grep ps
+ls

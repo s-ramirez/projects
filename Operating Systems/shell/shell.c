@@ -19,6 +19,7 @@
 #define ENTER '\n'
 
 struct Process {
+	int argc;
 	char **args;
 	struct Process *pipe;
 };
@@ -38,8 +39,7 @@ int change_dir(char **args)
 
 // Start a new process
 int run_process(struct Process *proc) {
-	struct Process *tmp;
-	int f_des[2];
+	int f_des[2], count;
 	pid_t pid;
 
 	if(proc->pipe == NULL) {
@@ -104,16 +104,22 @@ struct Process *process_input(char *line) {
 	int position;
 	char *token;
 	struct Process *newProc;
-	struct Process *proc = malloc(sizeof(struct Process));
-	proc->args = malloc(sizeof(line));
+	struct Process *proc = (struct Process*) malloc(sizeof(struct Process));
+	proc->argc = 1;
+	proc->args = (char**) malloc(proc->argc*sizeof(char));
 
 	token = strtok(line, " ");
 	while(token != NULL) {
 		switch(token[0]) {
 			case '|':
-				newProc = malloc(sizeof(struct Process));
+				proc->argc++;
+				proc->args = realloc(proc->args, proc->argc*sizeof(char));
+				proc->args[position] = '\0';
+
+				newProc = (struct Process*) malloc(sizeof(struct Process));
 				newProc->pipe = proc;
-				newProc->args = malloc(sizeof(line));
+				newProc->argc = 1;
+				newProc->args = (char**) malloc(proc->argc*sizeof(char));
 
 				proc = newProc;
 				position = 0;
@@ -122,21 +128,26 @@ struct Process *process_input(char *line) {
 				// redirect to file
 			break;
 			default:
+				proc->argc++;
+				proc->args = realloc(proc->args, proc->argc*sizeof(char));
 				proc->args[position] = token;
 				position++;
 			break;
 		}
 		token = strtok(NULL, " ");
 	}
+	proc->argc++;
+	proc->args = realloc(proc->args, proc->argc*sizeof(char));
+	proc->args[position] = '\0';
 	return proc;
 }
 
 // Read the users input
-char *read_input() {
-	char *line = (char*) malloc(sizeof(char)*MAX_INPUT_SIZE);
+int read_input(char* line) {
 	char buffer;
 
 	int position = 0;
+
 	while(read(0, &buffer, 1) >= 0) {
 		if(buffer > 0) {
 			// If a escape character was read
@@ -168,7 +179,7 @@ char *read_input() {
 					line[position] = '\0';
 					printf("\n");
 					fflush(stdout);
-					return line;
+					return 1;
 				break;
 				default:
 					line[position] = buffer;
@@ -178,12 +189,12 @@ char *read_input() {
 			}
 		}
 	}
-	return line;
+	return 0;
 }
 
 void input_loop() {
 	int status;
-	char *line;
+	char *line = (char*) malloc(sizeof(char)*MAX_INPUT_SIZE);
 	struct Process *commands, *temp;
 	FILE *history;
 
@@ -207,7 +218,7 @@ void input_loop() {
 	tcsetattr(0,TCSANOW, &termios_p);
 
 	// Open the history file
-	history = fopen("myhistory", "a");
+	history = fopen(".myhistory", "a");
 
 	do {
 		if(USER != NULL){
@@ -217,18 +228,17 @@ void input_loop() {
 		}
 		fflush(stdout);
 		// Read the user's input
-		line = read_input();
+		read_input(line);
 		fprintf(history, "%s\n", line);
 		fflush(history);
 		fflush(stdout);
+
 		// Parse input
 		commands = process_input(line);
 
 		// Execute commands
 		status = execute_command(commands);
-
-		free(line);
-
+		int i;
 		while(commands != NULL) {
 			temp = commands;
 			commands = commands->pipe;
