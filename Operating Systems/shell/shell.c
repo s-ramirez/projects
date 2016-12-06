@@ -24,6 +24,9 @@ struct Process {
 	struct Process *pipe;
 };
 
+struct Process *process_input(char *line);
+int execute_command(struct Process *proc);
+
 // Builtin CD function
 int change_dir(char **args)
 {
@@ -37,13 +40,57 @@ int change_dir(char **args)
   return 1;
 }
 
+// History functions
+char history[1000][MAX_INPUT_SIZE];
+int history_count = 0;
+
+void read_history(FILE *fp) {
+	while(fgets(history[history_count], MAX_INPUT_SIZE, fp)) {
+    history_count++;
+	}
+}
+
+int print_history() {
+	execlp("cat", "cat", "-n", ".myhistory", NULL);
+	return 2;
+}
+
+int execute_history(int position) {
+	struct Process *commands;
+
+	if(position > history_count || position < 0) {
+		perror("History");
+	} else {
+		printf("%s", history[position]);
+		fflush(stdout);
+		commands = process_input(history[position]);
+		execute_command(commands);
+	}
+	return 2;
+}
+
+int run(char **args) {
+	if(strcmp(args[0], "cd") == 0) {
+		// If the user wants a change of directory
+		return change_dir(args);
+	} else if (strcmp(args[0], "history") == 0){
+		return print_history();
+	} else if (args[0][0] == '!'){
+    memmove(args[0], args[0]+1, strlen(args[0]));
+		int command = atoi(args[0]);
+		execute_history(command);
+	} else {
+		return execvp(args[0], args);
+	}
+}
+
 // Start a new process
 int run_process(struct Process *proc) {
 	int f_des[2], count;
 	pid_t pid;
 
 	if(proc->pipe == NULL) {
-		return execvp(proc->args[0], proc->args);
+		return run(proc->args);
 	} else {
 		pipe(f_des);
 		switch(fork()) {
@@ -63,7 +110,7 @@ int run_process(struct Process *proc) {
 				dup2(f_des[READ], READ);
 				close(f_des[READ]);
 				close(f_des[WRITE]);
-				return execvp(proc->args[0], proc->args);
+				return run(proc->args);
 			break;
 		}
 	}
@@ -94,11 +141,6 @@ int execute_command(struct Process *proc) {
 	return 1;
 }
 
-// if(strcmp(args[0], "cd") == 0) {
-// 	// If the user wants a change of directory
-// 	return change_dir(args);
-// }
-
 // Process user input
 struct Process *process_input(char *line) {
 	int position;
@@ -125,6 +167,9 @@ struct Process *process_input(char *line) {
 			case '>':
 				// redirect to file
 			break;
+			case '<':
+				// redirect input
+			break;
 			default:
 				proc->argc++;
 				proc->args[position] = token;
@@ -142,6 +187,7 @@ int read_input(char* line) {
 	char buffer;
 
 	int position = 0;
+	int history_nav = history_count;
 
 	while(read(0, &buffer, 1) >= 0) {
 		if(buffer > 0) {
@@ -151,15 +197,39 @@ int read_input(char* line) {
 				read(0, &buffer, 1);
 				read(0, &buffer, 1);
 
-				if(buffer == 'A') {
-          write(2, "up", 2); // Up
-        } else if(buffer == 'B') {
-					write(2, "down", 4); // Down
-        // } else if(buffer == 'C') {
-        //   write(2, "\33[C", 3); // Right
-        // } else if(buffer == 'D') {
-        //   write(2, "\10", 2); // Left
-        // }
+				if(buffer == 'A') { // Up arrow
+					if(history_nav -1 > 0) {
+						history_nav--;
+
+						while(position > 0) {
+							write(2, "\10\33[1P", 5);
+							position--;
+						}
+						int i;
+						for(i = 0; history[history_nav][i] != '\n'; i++) {
+							position = i;
+							line[i] = history[history_nav][i];
+							write(2, &line[i], 1);
+						}
+						position++;
+					}
+        } else if(buffer == 'B') { // Down arrow
+					while(position > 0) {
+						write(2, "\10\33[1P", 5);
+						position--;
+					}
+					if(history_nav + 1 < history_count) {
+						history_nav++;
+
+						int i;
+						for(i = 0; history[history_nav][i] != '\n'; i++) {
+							position = i;
+							line[i] = history[history_nav][i];
+							write(2, &line[i], 1);
+						}
+						position++;
+					}
+        }
 				break;
 	    	case BACKSPACE:
 					if(position > 0) {
@@ -213,7 +283,8 @@ void input_loop() {
 	tcsetattr(0,TCSANOW, &termios_p);
 
 	// Open the history file
-	history = fopen(".myhistory", "a");
+	history = fopen(".myhistory", "a+");
+	read_history(history);
 
 	do {
 		if(USER != NULL){
@@ -224,8 +295,6 @@ void input_loop() {
 		fflush(stdout);
 		// Read the user's input
 		read_input(line);
-		fprintf(history, "%s\n", line);
-		fflush(history);
 		fflush(stdout);
 
 		// Parse input
@@ -233,6 +302,12 @@ void input_loop() {
 
 		// Execute commands
 		status = execute_command(commands);
+
+		// Write to file
+		if(status == 2) {
+			fprintf(history, "%s\n", line);
+			fflush(history);
+		}
 		int i;
 		while(commands != NULL) {
 			temp = commands;

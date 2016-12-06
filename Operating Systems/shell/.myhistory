@@ -8,9 +8,7 @@ ps
 s
 ls
 ps -A | grep ps
-
 ls
-£¾
 ps -A | grep ps
 ls
 ps -A | grep ps
@@ -131,7 +129,7 @@ git status
 status
 ls
 ps -a
-ps 
+ps
 ls
 ps -A
 ls
@@ -150,3 +148,33 @@ git push origin master
 git add .
 git commit -a -m test
 git push origin master
+cd ..
+pwd
+cd shell
+pwd
+ps -A | grep ps
+ps -A | grep ps | wc
+history
+history
+history
+history
+history
+history
+!12
+!100
+!120
+!100
+pwd
+pwd | grep a
+historu
+history
+100
+history
+169
+169
+169
+history
+history
+history
+166
+history
