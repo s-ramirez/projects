@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <termios.h>
+#include <fcntl.h>
 #include <string.h>
 
 #define USER_COLOR	"\x1b[1;32m"
@@ -22,14 +23,14 @@ struct Process {
 	int argc;
 	char **args;
 	struct Process *pipe;
+	char *fileOut, *fileIn;
 };
 
 struct Process *process_input(char *line);
 int execute_command(struct Process *proc);
 
 // Builtin CD function
-int change_dir(char **args)
-{
+int change_dir(char **args) {
   if (args[1] == NULL) {
     fprintf(stderr, "shell: expected argument\n");
   } else {
@@ -156,6 +157,11 @@ int execute_command(struct Process *proc) {
 		break;
 		case 0:
 			// Child process
+			if(proc->fileOut != NULL) {
+				int fout = open(proc->fileOut, O_RDWR|O_CREAT|O_APPEND, 0600);
+				dup2(fout, fileno(stdout));
+				close(fout);
+			}
 			return run_process(proc);
 		break;
 		default:
@@ -176,6 +182,9 @@ struct Process *process_input(char *line) {
 	struct Process *proc = (struct Process*) malloc(sizeof(struct Process));
 	proc->argc = 0;
 	proc->args = (char**) malloc(MAX_INPUT_SIZE*sizeof(char));
+	proc->fileOut = NULL;
+	proc->fileIn = NULL;
+
 	token = strtok(line, " ");
 	while(token != NULL) {
 		switch(token[0]) {
@@ -188,15 +197,25 @@ struct Process *process_input(char *line) {
 				newProc->pipe = proc;
 				newProc->argc = 0;
 				newProc->args = (char**) malloc(MAX_INPUT_SIZE*sizeof(char));
+				newProc->fileOut = NULL;
+				newProc->fileIn = NULL;
+
 
 				proc = newProc;
 				position = 0;
 			break;
 			case '>':
 				// Redirect output to file
-			break;
+				proc->argc++;
+				proc->args[position] = '\0';
+
+				proc->fileOut = strtok(NULL, " ");
 			case '<':
 				// Redirect input to file
+				proc->argc++;
+				proc->args[position] = '\0';
+
+				proc->fileIn = strtok(NULL, " ");
 			break;
 			default:
 				proc->argc++;
@@ -352,8 +371,7 @@ void input_loop() {
 	tcsetattr(0,TCSANOW, &termios_save);
 }
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
 	input_loop();
   return 0;
 }

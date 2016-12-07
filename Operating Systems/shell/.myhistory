@@ -16,3 +16,16 @@ ls
 pwd
 history
 ls
+./a.out
+history
+ps -A | grep a.out
+./a.out
+ps -A | grep a.out
+ps -A > input.txt
+cat input.txt
+echo test > test.txt
+cat test.txt
+ps -A
+clear
+ps -A > input.txt
+cat input.txt
