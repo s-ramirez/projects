@@ -44,3 +44,5 @@ wc < a.txt > b.txt
 wc < a.txt > b.txt
 wc < a.txt > b.txt
 wc < a.txt > b.txt
+gedit &
+git status
