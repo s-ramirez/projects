@@ -34,3 +34,13 @@ ls &
 wc < test.txt
 gedit
 gedit &
+echo test > a.txt
+wc < a.txt > b.txt
+wc < a.txt > b.txt
+wc < a.txt > b.txt
+wc < a.txt > b.txt
+wc < a.txt > b.txt
+wc < a.txt > b.txt
+wc < a.txt > b.txt
+wc < a.txt > b.txt
+wc < a.txt > b.txt

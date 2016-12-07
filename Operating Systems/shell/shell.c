@@ -110,7 +110,7 @@ int run(char **args) {
 		return print_history();
 	} else {
 		if(fileIn != NULL) {
-			int fin = open(fileIn, O_RDWR);
+			int fin = open(fileIn, O_RDONLY);
 			dup2(fin, fileno(stdin));
 			close(fin);
 		}
@@ -164,7 +164,7 @@ int execute_command(struct Process *proc) {
 		case 0:
 			// Child process
 			if(fileOut != NULL) {
-				int fout = open(fileOut, O_RDWR|O_CREAT|O_APPEND, 0600);
+				int fout = open(fileOut, O_WRONLY|O_CREAT, 0600);
 				dup2(fout, fileno(stdout));
 				close(fout);
 			}
@@ -217,6 +217,7 @@ struct Process *process_input(char *line) {
 				proc->args[position] = '\0';
 
 				fileOut = strtok(NULL, " ");
+			break;
 			case '<':
 				// Redirect input to file
 				proc->argc++;
