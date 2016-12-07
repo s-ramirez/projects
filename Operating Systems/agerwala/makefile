@@ -1,9 +1,9 @@
 # Compiler
 CC = gcc
 # Compiler flags
-CFLAGS = -lrt
+CFLAGS = -lrt -pthread
 
-TARGETS = printer hacker
+TARGETS = printer hacker node
 
 all: $(TARGETS)
 

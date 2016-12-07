@@ -1,36 +1,40 @@
 #include "common.h"
 
+int create_queue(int id) {
+  key_t key = ftok(".", id);
+
+  return msgget(key, IPC_CREAT | 0660);
+}
+
 int main(int argc, char **argv)
 {
-    mqd_t mq;
-    struct mq_attr attr;
+    struct msgbuf mrecv;
+    int printerq, replyq, requestq, status;
     char buffer[MAX_SIZE + 1];
-    int must_stop = 0;
-
-    /* initialize the queue attributes */
-    attr.mq_flags = 0;
-    attr.mq_maxmsg = 10;
-    attr.mq_msgsize = MAX_SIZE;
-    attr.mq_curmsgs = 0;
 
     /* create the message queue */
-    mq = mq_open(PRINTER_QUEUE, O_CREAT | O_RDONLY, 0644, &attr);
-    CHECK((mqd_t)-1 != mq);
+
+    printerq = create_queue(PRINTER_QUEUE);
+    CHECK(printerq != -1);
+    requestq = create_queue(REQUEST_QUEUE);
+    CHECK(requestq != -1);
+    replyq = create_queue(REPLY_QUEUE);
+    CHECK(replyq != -1);
+
     printf("Starting printer service...\n");
-    do {
-        ssize_t bytes_read;
+    while(1){
 
-        /* receive the message */
-        bytes_read = mq_receive(mq, buffer, MAX_SIZE, NULL);
-        CHECK(bytes_read >= 0);
+      /* receive the message */
+      status = msgrcv(printerq, &mrecv, MAX_SIZE, PRINTER_QUEUE, 0);
+      CHECK(status != -1);
 
-        buffer[bytes_read] = '\0';
-          printf("%s\n", buffer);
-    } while (!must_stop);
+      printf("%s\n", mrecv.content);
+    }
 
-    /* cleanup */
-    CHECK((mqd_t)-1 != mq_close(mq));
-    CHECK((mqd_t)-1 != mq_unlink(PRINTER_QUEUE));
+    /* Remove message queues */
+    msgctl(printerq, IPC_RMID, (struct msqid_ds *) 0);
+    msgctl(requestq, IPC_RMID, (struct msqid_ds *) 0);
+    msgctl(replyq, IPC_RMID, (struct msqid_ds *) 0);
 
     return 0;
 }
