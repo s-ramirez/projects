@@ -29,3 +29,8 @@ ps -A
 clear
 ps -A > input.txt
 cat input.txt
+atom .
+ls &
+wc < test.txt
+gedit
+gedit &

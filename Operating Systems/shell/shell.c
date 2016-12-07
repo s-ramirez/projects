@@ -23,9 +23,10 @@ struct Process {
 	int argc;
 	char **args;
 	struct Process *pipe;
-	char *fileOut, *fileIn;
 };
 
+int bg_exec;
+char *fileIn, *fileOut;
 struct Process *process_input(char *line);
 int execute_command(struct Process *proc);
 
@@ -108,6 +109,11 @@ int run(char **args) {
 	} else if (strcmp(args[0], "history") == 0){
 		return print_history();
 	} else {
+		if(fileIn != NULL) {
+			int fin = open(fileIn, O_RDWR);
+			dup2(fin, fileno(stdin));
+			close(fin);
+		}
 		return execvp(args[0], args);
 	}
 }
@@ -157,8 +163,8 @@ int execute_command(struct Process *proc) {
 		break;
 		case 0:
 			// Child process
-			if(proc->fileOut != NULL) {
-				int fout = open(proc->fileOut, O_RDWR|O_CREAT|O_APPEND, 0600);
+			if(fileOut != NULL) {
+				int fout = open(fileOut, O_RDWR|O_CREAT|O_APPEND, 0600);
 				dup2(fout, fileno(stdout));
 				close(fout);
 			}
@@ -166,9 +172,11 @@ int execute_command(struct Process *proc) {
 		break;
 		default:
 			// Parent process
-			do {
-				waitpid(pid, &status, WUNTRACED);
-			} while (!WIFEXITED(status) && !WIFSIGNALED(status));
+			if(!bg_exec) {
+				do {
+					waitpid(pid, &status, WUNTRACED);
+				} while (!WIFEXITED(status) && !WIFSIGNALED(status));
+			}
 		break;
 	}
 	return 1;
@@ -182,8 +190,10 @@ struct Process *process_input(char *line) {
 	struct Process *proc = (struct Process*) malloc(sizeof(struct Process));
 	proc->argc = 0;
 	proc->args = (char**) malloc(MAX_INPUT_SIZE*sizeof(char));
-	proc->fileOut = NULL;
-	proc->fileIn = NULL;
+
+	bg_exec = 0;
+	fileOut = NULL;
+	fileIn = NULL;
 
 	token = strtok(line, " ");
 	while(token != NULL) {
@@ -197,9 +207,6 @@ struct Process *process_input(char *line) {
 				newProc->pipe = proc;
 				newProc->argc = 0;
 				newProc->args = (char**) malloc(MAX_INPUT_SIZE*sizeof(char));
-				newProc->fileOut = NULL;
-				newProc->fileIn = NULL;
-
 
 				proc = newProc;
 				position = 0;
@@ -209,13 +216,16 @@ struct Process *process_input(char *line) {
 				proc->argc++;
 				proc->args[position] = '\0';
 
-				proc->fileOut = strtok(NULL, " ");
+				fileOut = strtok(NULL, " ");
 			case '<':
 				// Redirect input to file
 				proc->argc++;
 				proc->args[position] = '\0';
 
-				proc->fileIn = strtok(NULL, " ");
+				fileIn = strtok(NULL, " ");
+			break;
+			case '&':
+				bg_exec = 1;
 			break;
 			default:
 				proc->argc++;
