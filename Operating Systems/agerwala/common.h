@@ -30,6 +30,7 @@
 #define ACK 100
 #define REQUEST 101
 #define REPLY 102
+#define CONF 103
 
 #define GET_SLEEP() ((rand() / (BIG_NUM/MAX_SLEEP)) + 1)
 

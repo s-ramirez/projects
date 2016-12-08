@@ -10,6 +10,7 @@
 #define REQUEST_CS 5 /* True when node requests CS */
 #define NODES 100 /* Other nodes */
 #define REPLY_DEFFERED 200 /* Reply_deferred[i] is true when node defers reply to node i */
+#define ACKS 300
 
 // Concat two strings
 char* concat(const char *s1, const char *s2)
@@ -174,6 +175,7 @@ int main(int argc, char *argv[]) {
     printf("\t> I\'m the first node \n");
     sharedmem[N] = 1;
     sharedmem[HIGHEST_REQ_NUM] = 0;
+    sharedmem[ACKS] = 0;
   } else {
     status = msgrcv(replyq, &ack_msg, MSG_SIZE, sharedmem[ME], 0);
     CHECK(status != -1);
@@ -199,6 +201,8 @@ int main(int argc, char *argv[]) {
     for (i = 1; i < sharedmem[N]; i++) {
       send_msg(sharedmem[NODES+i], requestq, ACK, argv[1]);
     }
+    printf("[*] Need %d acknowledgements\n", sharedmem[N] - 1);
+    sharedmem[ACKS] = sharedmem[N] - 1;
   }
 
   /* Start communication */
@@ -221,6 +225,7 @@ int main(int argc, char *argv[]) {
             sharedmem[NODES + sharedmem[N]] = atoi(mrecv.content);
             sharedmem[N]++;
           V(nodes_sem);
+          send_msg(mrecv.msg_fm, replyq, CONF, "");
         break;
         default:
           request_handler(mrecv.req_num, mrecv.msg_fm);
@@ -240,8 +245,19 @@ int main(int argc, char *argv[]) {
         status = msgrcv(replyq, &mrecv, MSG_SIZE, sharedmem[ME], 0);
         CHECK(status != -1);
 
-        printf("[*] Received reply from node %d\n", mrecv.msg_fm);
-        reply_handler();
+        switch(mrecv.type) {
+          case CONF:
+            printf("[*] Received confirmation from %d \n", mrecv.msg_fm);
+            sharedmem[ACKS] = sharedmem[ACKS] - 1;
+            if(sharedmem[ACKS] == 0) {
+              printf("[*] Acknowledged by everyone!\n");
+            }
+          break;
+          default:
+            printf("[*] Received reply from node %d\n", mrecv.msg_fm);
+            reply_handler();
+          break;
+        }
       }
     } else {
       //Spawn a third child to monitor broadcast requests
@@ -282,9 +298,12 @@ int main(int argc, char *argv[]) {
           timer = 20;
           printf("[*] Waiting %ds until trying to write...\n", timer);
           sleep(timer);
-          P(nodes_sem);
-            printer_handler();
-          V(nodes_sem);
+          if(sharedmem[ACKS] == 0){
+            printf("[*] Attempting to write...\n");
+            P(nodes_sem);
+              printer_handler();
+            V(nodes_sem);
+          }
         }
       }
     }
