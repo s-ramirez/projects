@@ -27,7 +27,7 @@ int open_queue(int id){
   return msgget(key, IPC_CREAT | 0660);
 }
 
-int *sharedmem, mutex_sem, wait_sem, replyq, requestq, printerq;
+int *sharedmem, mutex_sem, wait_sem, nodes_sem, replyq, requestq, printerq;
 
 int get_node(int id) {
   int j;
@@ -152,6 +152,7 @@ int main(int argc, char *argv[]) {
   /* Create semaphores */
   mutex_sem = SEMAPHORE(SEM_BIN, 1);
   wait_sem = SEMAPHORE(SEM_BIN, 1);
+  nodes_sem = SEMAPHORE(SEM_BIN, 1);
 
   /* Attach the segment */
   sharedmem = shmat(memid, (void *) 0, 0);
@@ -167,39 +168,37 @@ int main(int argc, char *argv[]) {
 
   /* Join the group */
   printf("[*] Sending initial message...\n");
-  sleep(TIMEOUT);
 
-  status = msgrcv(replyq, &ack_msg, MSG_SIZE, sharedmem[ME], IPC_NOWAIT);
-  sharedmem[NODES] = sharedmem[ME];
-  if(status == -1) {
+  sharedmem[NODES] = nodenum;
+  if(nodenum == 1) {
     printf("\t> I\'m the first node \n");
     sharedmem[N] = 1;
     sharedmem[HIGHEST_REQ_NUM] = 0;
   } else {
+    status = msgrcv(replyq, &ack_msg, MSG_SIZE, sharedmem[ME], 0);
+    CHECK(status != -1);
     printf("\t> Found a sponsor, with id: %i who sent %s\n", ack_msg.msg_fm, ack_msg.content);
     char* token;
     int i;
-    P(mutex_sem);
-      token = strtok(ack_msg.content, " ");
-      sscanf(token, "%d", &i);
-      sharedmem[N] = i + 1;
-      token = strtok(NULL, " ");
-      sscanf(token, "%d", &i);
-      sharedmem[HIGHEST_REQ_NUM] = i;
+    token = strtok(ack_msg.content, " ");
+    sscanf(token, "%d", &i);
+    sharedmem[N] = i + 1;
+    token = strtok(NULL, " ");
+    sscanf(token, "%d", &i);
+    sharedmem[HIGHEST_REQ_NUM] = i;
 
-      i = 1;
-      token = strtok(NULL, " ");
+    i = 1;
+    token = strtok(NULL, " ");
 
-      while(token != NULL) {
-        sscanf(token, "%d", &sharedmem[NODES + i]);
-        token = strtok(NULL, " ");
-        i++;
-      }
-      /* Let everyone know I'm here */
-      for (i = 1; i < sharedmem[N]; i++) {
-        send_msg(sharedmem[NODES+i], requestq, ACK, argv[1]);
-      }
-    V(mutex_sem);
+    while(token != NULL) {
+      sscanf(token, "%d", &sharedmem[NODES + i]);
+      token = strtok(NULL, " ");
+      i++;
+    }
+    /* Let everyone know I'm here */
+    for (i = 1; i < sharedmem[N]; i++) {
+      send_msg(sharedmem[NODES+i], requestq, ACK, argv[1]);
+    }
   }
 
   /* Start communication */
@@ -217,10 +216,10 @@ int main(int argc, char *argv[]) {
       printf("[*] Received request from node %d...\n", mrecv.msg_fm);
       if(mrecv.type == ACK) {
         printf("[*] Acknowledged node: %s\n", mrecv.content);
-        P(mutex_sem);
+        P(nodes_sem);
           sharedmem[NODES + sharedmem[N]] = atoi(mrecv.content);
           sharedmem[N]++;
-        V(mutex_sem);
+        V(nodes_sem);
       } else {
         request_handler(mrecv.req_num, mrecv.msg_fm);
       }
@@ -256,7 +255,7 @@ int main(int argc, char *argv[]) {
           CHECK(status != -1);
           if(mrecv.msg_fm != sharedmem[ME]){
             printf("\t> A new node with id: %d has entered, sponsoring...\n", mrecv.msg_fm);
-            P(wait_sem);
+            P(nodes_sem);
               buffer[0] = sharedmem[N] + '0';
               buffer[1] = ' ';
               buffer[2] = sharedmem[HIGHEST_REQ_NUM] + '0';
@@ -268,7 +267,7 @@ int main(int argc, char *argv[]) {
               }
               buffer[pos] = '\0';
               printf("\t> Sending %s to new node %d\n", buffer, mrecv.msg_fm);
-            V(wait_sem);
+            V(nodes_sem);
             send_msg(mrecv.msg_fm, replyq, ACK, buffer);
           }
         }
@@ -280,7 +279,9 @@ int main(int argc, char *argv[]) {
           timer = 20;
           printf("[*] Waiting %ds until trying to write...\n", timer);
           sleep(timer);
-          printer_handler();
+          P(nodes_sem);
+            printer_handler();
+          V(nodes_sem);
         }
       }
     }
