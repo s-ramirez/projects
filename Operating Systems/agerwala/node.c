@@ -1,6 +1,6 @@
 #include "common.h"
 
-#define TIMEOUT 5
+#define TIMEOUT 20
 
 #define ME 0 /* My node id */
 #define N 1 /* Number of nodes */
@@ -214,14 +214,17 @@ int main(int argc, char *argv[]) {
       status = msgrcv(requestq, &mrecv, MSG_SIZE, sharedmem[ME], 0);
       CHECK(status != -1);
       printf("[*] Received request from node %d...\n", mrecv.msg_fm);
-      if(mrecv.type == ACK) {
-        printf("[*] Acknowledged node: %s\n", mrecv.content);
-        P(nodes_sem);
-          sharedmem[NODES + sharedmem[N]] = atoi(mrecv.content);
-          sharedmem[N]++;
-        V(nodes_sem);
-      } else {
-        request_handler(mrecv.req_num, mrecv.msg_fm);
+      switch(mrecv.type) {
+        case ACK:
+          printf("[*] Acknowledged node: %s\n", mrecv.content);
+          P(nodes_sem);
+            sharedmem[NODES + sharedmem[N]] = atoi(mrecv.content);
+            sharedmem[N]++;
+          V(nodes_sem);
+        break;
+        default:
+          request_handler(mrecv.req_num, mrecv.msg_fm);
+        break;
       }
     }
   } else {
@@ -254,8 +257,8 @@ int main(int argc, char *argv[]) {
           status = msgrcv(requestq, &mrecv, MSG_SIZE, ACK, 0);
           CHECK(status != -1);
           if(mrecv.msg_fm != sharedmem[ME]){
-            printf("\t> A new node with id: %d has entered, sponsoring...\n", mrecv.msg_fm);
             P(nodes_sem);
+              printf("\t> A new node with id: %d has entered, sponsoring...\n", mrecv.msg_fm);
               buffer[0] = sharedmem[N] + '0';
               buffer[1] = ' ';
               buffer[2] = sharedmem[HIGHEST_REQ_NUM] + '0';
