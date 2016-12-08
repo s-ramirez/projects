@@ -22,7 +22,7 @@ int main(int argc, char **argv)
     msg.type = 0;
 
     //timer = GET_SLEEP();
-    timer = 2;
+    timer = 10;
     printf("Waiting %ds until next message...\n", timer);
     sleep(timer);
 
