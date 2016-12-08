@@ -31,7 +31,7 @@ int *sharedmem, mutex_sem, wait_sem, replyq, requestq, printerq;
 
 int get_node(int id) {
   int j;
-  for(j = 1; j <= sharedmem[N]; j++) {
+  for(j = 1; j < sharedmem[N]; j++) {
     if(sharedmem[NODES+j] == id)
       return j;
   }
@@ -68,11 +68,11 @@ void request_handler(int k, int i) {
   V(mutex_sem);
   /* Defer_it is true if we have priority */
   if(defer_it) {
-    printf("\t>I have priority, he should wait.\n");
+    printf("\t> I have priority, he should wait.\n");
     sharedmem[REPLY_DEFFERED + node_index] = 1;
   } else {
     //send reply message
-    printf("\t>He has priority, answering back...\n");
+    printf("\t> He has priority, answering back...\n");
     send_msg(i, replyq, REPLY, "");
   }
 }
@@ -100,7 +100,7 @@ void printer_handler() {
   char buffer[MAX_SIZE];
   snprintf(buffer, sizeof(buffer), "### START OUTPUT FOR NODE %i ###", sharedmem[ME]);
   send_msg(PRINTER_QUEUE, printerq, REQUEST, buffer);
-  sleep(10);
+  sleep(5);
   memset(buffer,0,sizeof(buffer));
   snprintf(buffer, sizeof(buffer), "--- END OUTPUT FOR NODE %i ---", sharedmem[ME]);
   send_msg(PRINTER_QUEUE, printerq, REQUEST, buffer);
@@ -109,7 +109,7 @@ void printer_handler() {
   sharedmem[REQUEST_CS] = 0;
   printf("\t> Writing done! Notifying everyone... \n");
   int node;
-  for (i = 1; i <= sharedmem[N]; i++) {
+  for (i = 1; i < sharedmem[N]; i++) {
     if (sharedmem[REPLY_DEFFERED + i]) {
       sharedmem[REPLY_DEFFERED + i] = 0;
       send_msg(sharedmem[NODES+i], replyq, REPLY, "");
@@ -150,8 +150,8 @@ int main(int argc, char *argv[]) {
   CHECK(printerq != -1);
 
   /* Create semaphores */
-  mutex_sem = SEMAPHORE(SEM_CNT, 1);
-  wait_sem = SEMAPHORE(SEM_CNT, 1);
+  mutex_sem = SEMAPHORE(SEM_BIN, 1);
+  wait_sem = SEMAPHORE(SEM_BIN, 1);
 
   /* Attach the segment */
   sharedmem = shmat(memid, (void *) 0, 0);
@@ -170,36 +170,36 @@ int main(int argc, char *argv[]) {
   sleep(TIMEOUT);
 
   status = msgrcv(replyq, &ack_msg, MSG_SIZE, sharedmem[ME], IPC_NOWAIT);
+  sharedmem[NODES] = sharedmem[ME];
   if(status == -1) {
     printf("\t> I\'m the first node \n");
     sharedmem[N] = 1;
-    sharedmem[NODES] = sharedmem[ME];
     sharedmem[HIGHEST_REQ_NUM] = 0;
   } else {
-    printf("\t> Found a sponsor, with id: %i\n", ack_msg.msg_fm);
+    printf("\t> Found a sponsor, with id: %i who sent %s\n", ack_msg.msg_fm, ack_msg.content);
     char* token;
     int i;
-
-    token = strtok(ack_msg.content, " ");
-    sscanf(token, "%d", &i);
-    sharedmem[N] = i + 1;
-    token = strtok(NULL, " ");
-    sscanf(token, "%d", &i);
-    sharedmem[HIGHEST_REQ_NUM] = i;
-    printf("\t> Highest request number: %d\n", sharedmem[HIGHEST_REQ_NUM]);
-
-    i = 1;
-    token = strtok(NULL, " ");
-
-    while(token != NULL) {
-      sscanf(token, "%d", &sharedmem[NODES + i]);
+    P(mutex_sem);
+      token = strtok(ack_msg.content, " ");
+      sscanf(token, "%d", &i);
+      sharedmem[N] = i + 1;
       token = strtok(NULL, " ");
-      i++;
-    }
-    /* Let everyone know I'm here */
-    for (i = 1; i <= sharedmem[N]; i++) {
-      send_msg(sharedmem[NODES+i], requestq, ACK, argv[1]);
-    }
+      sscanf(token, "%d", &i);
+      sharedmem[HIGHEST_REQ_NUM] = i;
+
+      i = 1;
+      token = strtok(NULL, " ");
+
+      while(token != NULL) {
+        sscanf(token, "%d", &sharedmem[NODES + i]);
+        token = strtok(NULL, " ");
+        i++;
+      }
+      /* Let everyone know I'm here */
+      for (i = 1; i < sharedmem[N]; i++) {
+        send_msg(sharedmem[NODES+i], requestq, ACK, argv[1]);
+      }
+    V(mutex_sem);
   }
 
   /* Start communication */
@@ -216,7 +216,7 @@ int main(int argc, char *argv[]) {
       CHECK(status != -1);
       printf("[*] Received request from node %d...\n", mrecv.msg_fm);
       if(mrecv.type == ACK) {
-        printf("[*] It's a new node, adding %s\n", mrecv.content);
+        printf("[*] Acknowledged node: %s\n", mrecv.content);
         P(mutex_sem);
           sharedmem[NODES + sharedmem[N]] = atoi(mrecv.content);
           sharedmem[N]++;
@@ -256,7 +256,7 @@ int main(int argc, char *argv[]) {
           CHECK(status != -1);
           if(mrecv.msg_fm != sharedmem[ME]){
             printf("\t> A new node with id: %d has entered, sponsoring...\n", mrecv.msg_fm);
-            P(mutex_sem);
+            P(wait_sem);
               buffer[0] = sharedmem[N] + '0';
               buffer[1] = ' ';
               buffer[2] = sharedmem[HIGHEST_REQ_NUM] + '0';
@@ -266,7 +266,9 @@ int main(int argc, char *argv[]) {
                 buffer[pos+1] = sharedmem[NODES+cur] + '0';
                 pos += 2;
               }
-            V(mutex_sem);
+              buffer[pos] = '\0';
+              printf("\t> Sending %s to new node %d\n", buffer, mrecv.msg_fm);
+            V(wait_sem);
             send_msg(mrecv.msg_fm, replyq, ACK, buffer);
           }
         }
