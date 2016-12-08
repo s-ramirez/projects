@@ -1,71 +1,268 @@
 #include "common.h"
-//
-int main(int argc, char **argv) {}
-// #include <semaphore.h>
-// #include <sys/ipc.h>
-// #include <sys/shm.h>
-//
-// #include "common.h"
-//
-// #define N 0 /* Number of nodes */
-// #define REQ_NUM 1 /* Nodes sequence number */
-// #define HIGHEST_REQ_NUM 2 /* Highest request number */
-// #define OUTSTANDING_REPLY 3 /* Number of outstanding replies */
-// #define REQUEST_CS 4 /* True when node requests CS */
-// #define REPLY_DEFFERED 5 /* Reply_deferred[i] is true when node defers reply to node i */
-//
-// int nodenum;
-//
-// char* concat(const char *s1, const char *s2)
-// {
-//     char *result = malloc(strlen(s1)+strlen(s2)+1);//+1 for the zero-terminator
-//     //in real code you would check for errors in malloc here
-//     strcpy(result, s1);
-//     strcat(result, s2);
-//     return result;
-// }
-//
-// int main(int argc, char *argv[]) {
-//   int memid, *sharedmem, status;
-//   int key = getuid();
-//
-//   if(argc < 2) {
-//     printf("One argument expected: <node_number>\n");
-//     exit(1);
-//   }
-//
-//   nodenum = atoi(argv[1]);
-//   /* Get shared memory segment */
-//   memid = shmget(key+nodenum, SHM_SIZE, 0640|IPC_CREAT);
-//   CHECK(memid != -1);
-//
-//   /* Create semaphores */
-//
-//   sem_t *sem_mutex = sem_open(concat(SEM_MUTEX,argv[1]), O_CREAT, 0644, 0);
-//   CHECK(sem_mutex > 0);
-//   sem_t *sem_wait = sem_open(concat(SEM_WAIT,argv[1]), O_CREAT, 0644, 0);
-//   CHECK(sem_wait > 0);
-//   /* Attach the segment */
-//   sharedmem = shmat(memid, (void *) 0, 0);
-//   CHECK(sharedmem != -1);
-//
-//   /* Write shared variables */
-//
-//   /* Detach shared memory */
-//   //status = shmdt(sharedmem);
-//   //CHECK(status != -1);
-//   return 0;
-// }
-//
-// /* k is the sequence number being requested */
-// /* i is the node making the request */
-// int request_handler() {
-//   int defer_it;
-//
-//
-//
-// }
-//
-// int reply_handler() {
-//
-// }
+
+#define ME 0 /* My node id */
+#define N 1 /* Number of nodes */
+#define REQ_NUM 2 /* Nodes sequence number */
+#define HIGHEST_REQ_NUM 3 /* Highest request number */
+#define OUTSTANDING_REPLY 4 /* Number of outstanding replies */
+#define REQUEST_CS 5 /* True when node requests CS */
+#define NODES 100 /* Other nodes */
+#define REPLY_DEFFERED 200 /* Reply_deferred[i] is true when node defers reply to node i */
+
+// Concat two strings
+char* concat(const char *s1, const char *s2)
+{
+  char *result = malloc(strlen(s1)+strlen(s2)+1);//+1 for the zero-terminator
+  //in real code you would check for errors in malloc here
+  strcpy(result, s1);
+  strcat(result, s2);
+  return result;
+}
+
+// Open requested queue
+int open_queue(int id){
+  key_t key = ftok(".", id);
+  return msgget(key, IPC_CREAT | 0660);
+}
+
+int *sharedmem, mutex_sem, wait_sem, replyq, requestq, printerq;
+
+int get_node(int id) {
+  int j;
+  for(j = 1; j <= sharedmem[N]; j++) {
+    if(sharedmem[NODES+j] == id)
+      return j;
+  }
+  return -1;
+}
+
+/* Send a message */
+int send_msg(int to, int queue, int type, char content[MAX_SIZE]) {
+  struct msgbuf msg;
+
+  msg.type = type;
+  msg.msg_to = to;
+  msg.msg_fm = sharedmem[ME];
+  msg.req_num = sharedmem[REQ_NUM];
+  strcpy(msg.content, content);
+
+  return msgsnd(queue, &msg, MSG_SIZE, 0);
+}
+
+/* k is the sequence number being requested */
+/* i is the node making the request */
+void request_handler(int k, int i) {
+  int defer_it, node_index;
+
+  if(k > sharedmem[HIGHEST_REQ_NUM])
+    sharedmem[HIGHEST_REQ_NUM] = k;
+  P(mutex_sem);
+    node_index = get_node(i);
+    defer_it = sharedmem[REQUEST_CS] &&
+            ((k > sharedmem[REQ_NUM]) ||
+              (k == sharedmem[REQ_NUM] && i > sharedmem[ME]));
+  V(mutex_sem);
+
+  /* Defer_it is true if we have priority */
+  if(defer_it)
+    sharedmem[REPLY_DEFFERED + node_index] = 1;
+  else {
+    //send reply message
+    send_msg(i, replyq, REPLY, "");
+  }
+}
+
+void printer_handler() {
+  int i;
+
+  P(mutex_sem);
+    sharedmem[REQUEST_CS] = 1;
+    sharedmem[REQ_NUM] = sharedmem[HIGHEST_REQ_NUM]++;
+  V(mutex_sem);
+  sharedmem[OUTSTANDING_REPLY] = sharedmem[N] - 1;
+  // Send request to all
+  for(i=1; i <= sharedmem[N]; i++)
+    send_msg(sharedmem[NODES + i], REQUEST_QUEUE, REQUEST, "");
+  // Wait for replies
+  while(sharedmem[OUTSTANDING_REPLY] != 0)
+    P(wait_sem);
+
+  // CRITICAL SECTION
+  char buffer[MAX_SIZE];
+  snprintf(buffer, sizeof(buffer), "### START OUTPUT FOR NODE %i ###", sharedmem[ME]);
+  printf("Sending %s to the printer\n", buffer);
+  send_msg(PRINTER_QUEUE, printerq, REQUEST, buffer);
+  sleep(10);
+  memset(buffer,0,sizeof(buffer));
+  snprintf(buffer, sizeof(buffer), "--- END OUTPUT FOR NODE %i ---", sharedmem[ME]);
+  send_msg(PRINTER_QUEUE, printerq, REQUEST, buffer);
+  // END CRITICAL SECTION
+
+  sharedmem[REQUEST_CS] = 0;
+  int node;
+  for (i = 1; i <= sharedmem[N]; i++) {
+    if (sharedmem[REPLY_DEFFERED + i]) {
+      sharedmem[REPLY_DEFFERED + i] = 0;
+      send_msg(sharedmem[NODES+i], replyq, REPLY, "");
+    }
+  }
+}
+
+void reply_handler() {
+  sharedmem[OUTSTANDING_REPLY] = sharedmem[OUTSTANDING_REPLY]-1;
+  V(wait_sem);
+}
+
+int main(int argc, char *argv[]) {
+  int memid, status, timer;
+  pid_t pid = getpid();
+
+  // Initialize EZIPC
+  SETUP();
+
+  if(argc < 2) {
+    printf("One argument expected: <node_number>\n");
+    exit(1);
+  }
+
+  int nodenum = atoi(argv[1]);
+
+  /* Get shared memory segment */
+  memid = shmget(pid, MAX_SIZE, 0640|IPC_CREAT);
+  CHECK(memid != -1);
+
+  /* Open queues */
+  replyq = open_queue(REPLY_QUEUE);
+  CHECK(replyq != -1);
+  requestq = open_queue(REQUEST_QUEUE);
+  CHECK(requestq != -1);
+  printerq = open_queue(PRINTER_QUEUE);
+  CHECK(printerq != -1);
+
+  /* Create semaphores */
+  mutex_sem = SEMAPHORE(SEM_CNT, 1);
+  wait_sem = SEMAPHORE(SEM_CNT, 1);
+
+  /* Attach the segment */
+  sharedmem = shmat(memid, (void *) 0, 0);
+  CHECK(sharedmem != (int *) -1);
+
+  sharedmem[ME] = nodenum;
+
+  /* Send initial message */
+  struct msgbuf ack_msg, mrecv;
+
+  status = send_msg(ACK, requestq, ACK, "");
+  CHECK(status != -1);
+
+  /* Join the group */
+  printf("Sending initial message...\n");
+  sleep(10);
+
+  status = msgrcv(replyq, &ack_msg, MSG_SIZE, sharedmem[ME], IPC_NOWAIT);
+  if(status == -1) {
+    printf("I\'m the first node \n");
+    sharedmem[N] = 1;
+    sharedmem[NODES] = sharedmem[ME];
+    sharedmem[HIGHEST_REQ_NUM] = 0;
+  } else {
+    printf("Found a sponsor, with id: %i\n", ack_msg.msg_fm);
+    char* token;
+    int i;
+
+    token = strtok(ack_msg.content, " ");
+    sscanf(token, "%d", &i);
+    sharedmem[N] = i + 1;
+    printf("Number of nodes: %d\n", sharedmem[N]);
+    token = strtok(NULL, " ");
+    sscanf(token, "%d", &i);
+    sharedmem[HIGHEST_REQ_NUM] = i;
+    printf("Highest request number: %d\n", sharedmem[HIGHEST_REQ_NUM]);
+
+    i = 1;
+    token = strtok(NULL, " ");
+    while(token != NULL) {
+      sscanf(token, "%d", &sharedmem[NODES + i]);
+      token = strtok(NULL, " ");
+      i++;
+    }
+  }
+
+  /* Start communication */
+  int request_proc, reply_proc, broadcast_proc;
+  request_proc = fork();
+  CHECK(request_proc != -1);
+
+  if(request_proc == 0) {
+    // In child first child process
+    // Monitor request queue
+    printf("[*] Request process ready\n");
+    while(1) {
+      status = msgrcv(requestq, &mrecv, MSG_SIZE, sharedmem[ME], 0);
+      CHECK(status != -1);
+      printf("Received request from node %d...\n", mrecv.msg_fm);
+      reply_handler();
+    }
+  } else {
+    // In parent
+    // Spawn second child to monitor reply queue
+    reply_proc = fork();
+    CHECK(reply_proc != -1);
+
+    if(reply_proc == 0) {
+      //Monitor reply queue
+      printf("[*] Reply process ready\n");
+      while(1) {
+        status = msgrcv(replyq, &mrecv, MSG_SIZE, sharedmem[ME], 0);
+        CHECK(status != -1);
+
+        printf("Received reply from node %d...\n", mrecv.msg_fm);
+        request_handler(mrecv.req_num, mrecv.msg_fm);
+      }
+    } else {
+      //Spawn a third child to monitor broadcast requests
+      broadcast_proc = fork();
+      CHECK(broadcast_proc != -1);
+      int pos, cur;
+      char buffer[MAX_SIZE];
+
+      if(broadcast_proc){
+        //Monitor request queue for broadcast messages
+        printf("[*] Broadcast process ready\n");
+        while(1) {
+          status = msgrcv(requestq, &mrecv, MSG_SIZE, ACK, 0);
+          CHECK(status != -1);
+          if(mrecv.msg_fm != sharedmem[ME]){
+            printf("A new node with id: %d has entered, sponsoring...\n", mrecv.msg_fm);
+            P(mutex_sem);
+              buffer[0] = sharedmem[N] + '0';
+              buffer[1] = ' ';
+              buffer[2] = sharedmem[HIGHEST_REQ_NUM] + '0';
+              pos = 3;
+              for(cur = 0; cur < sharedmem[N]; cur++) {
+                buffer[pos] = ' ';
+                buffer[pos+1] = sharedmem[NODES+cur] + '0';
+                pos += 2;
+              }
+            V(mutex_sem);
+            send_msg(mrecv.msg_fm, replyq, ACK, buffer);
+          }
+        }
+      } else {
+        //Parent
+        //Write every once in a while
+        while (1) {
+          //timer = GET_SLEEP();
+          timer = 20;
+          printf("Waiting %ds until trying to write...\n", timer);
+          sleep(timer);
+          printer_handler();
+        }
+      }
+    }
+  }
+
+  /* Remove shared memory */
+  shmctl(memid, IPC_RMID, (struct shmid_ds *) 0);
+  return 0;
+}

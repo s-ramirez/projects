@@ -1,4 +1,4 @@
- #include "common.h"
+#include "common.h"
 
 int main(int argc, char **argv)
 {
@@ -18,21 +18,22 @@ int main(int argc, char **argv)
   while (1) {
     msg.msg_to = PRINTER_QUEUE;
     msg.msg_fm = hacker_pid;
+    msg.req_num = 0;
+    msg.type = 0;
 
     //timer = GET_SLEEP();
-    timer = 10;
+    timer = 2;
     printf("Waiting %ds until next message...\n", timer);
     sleep(timer);
-    printf("I don\'t follow the rules!\n");
 
     /* user input */
     //memset(buffer, 0, MAX_SIZE);
     //fgets(buffer, MAX_SIZE, stdin);
 
     strcpy(msg.content, buffer);
-
+    printf("I don\'t follow the rules!\n");
     /* send the message */
-    status  = msgsnd(printerq, &msg, MAX_SIZE, 0);
+    status  = msgsnd(printerq, &msg, MSG_SIZE, 0);
     CHECK(status >= 0);
     printf("Message sent!\n");
   }
