@@ -182,10 +182,22 @@ int execute_command(struct Process *proc) {
 	return 1;
 }
 
+// Concat two strings
+char* concat(const char *s1, const char *s2)
+{
+  const size_t len1 = strlen(s1);
+  const size_t len2 = strlen(s2);
+  char *result = malloc(len1+len2+2);//+2 for the zero-terminator and empty space
+  memcpy(result, s1, len1);
+	memcpy(result+len1, " ", 1);
+  memcpy(result+len1+1, s2, len2+1);//+1 to copy the null-terminator
+  return result;
+}
+
 // Process user input
 struct Process *process_input(char *line) {
-	int position;
 	char *token;
+	int position, str_started;
 	struct Process *newProc;
 	struct Process *proc = (struct Process*) malloc(sizeof(struct Process));
 	proc->argc = 0;
@@ -194,6 +206,7 @@ struct Process *process_input(char *line) {
 	bg_exec = 0;
 	fileOut = NULL;
 	fileIn = NULL;
+	str_started = 0;
 
 	token = strtok(line, " ");
 	while(token != NULL) {
@@ -226,11 +239,28 @@ struct Process *process_input(char *line) {
 				fileIn = strtok(NULL, " ");
 			break;
 			case '&':
+				// Background execution
 				bg_exec = 1;
 			break;
+			case '\'':
+			case '\"':
+				// Quotation marks
+				str_started = 1;
 			default:
 				proc->argc++;
 				proc->args[position] = token;
+				if (str_started){
+					token = strtok(NULL, " ");
+					while(token != NULL){
+						proc->args[position] = concat(proc->args[position], token);
+						if(token[strlen(token)-1] == '\"' || token[strlen(token)-1] == '\'')
+							break;
+						token = strtok(NULL, " ");
+					}
+					// Remove first and last characters
+					proc->args[position]++;
+					proc->args[position][strlen(proc->args[position])-1] = '\0';
+				}
 				position++;
 			break;
 		}
