@@ -103,6 +103,7 @@ char* check_history(char* line) {
 }
 
 int run(char **args) {
+	int status;
 	if(strcmp(args[0], "cd") == 0) {
 		// If the user wants a change of directory
 		return change_dir(args);
@@ -114,7 +115,13 @@ int run(char **args) {
 			dup2(fin, fileno(stdin));
 			close(fin);
 		}
-		return execvp(args[0], args);
+		status = execvp(args[0], args);
+		if(status == -1) {
+			printf("%s: Command not found\n", args[0]);
+			fflush(stdout);
+			return status;
+		}
+		return status;
 	}
 }
 
