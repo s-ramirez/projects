@@ -197,12 +197,14 @@ int main(int argc, char *argv[]) {
       token = strtok(NULL, " ");
       i++;
     }
-    /* Let everyone know I'm here */
-    for (i = 1; i < sharedmem[N]; i++) {
-      send_msg(sharedmem[NODES+i], requestq, ACK, argv[1]);
-    }
-    printf("[*] Need %d acknowledgements\n", sharedmem[N] - 1);
-    sharedmem[ACKS] = sharedmem[N] - 1;
+    P(nodes_sem);
+      /* Let everyone know I'm here */
+      for (i = 1; i < sharedmem[N]; i++) {
+        send_msg(sharedmem[NODES+i], requestq, ACK, argv[1]);
+      }
+      printf("[*] Need %d acknowledgements\n", sharedmem[N] - 1);
+      sharedmem[ACKS] = sharedmem[N] - 1;
+    V(nodes_sem);
   }
 
   /* Start communication */

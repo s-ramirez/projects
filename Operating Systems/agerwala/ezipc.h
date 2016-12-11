@@ -3,9 +3,11 @@
 #include <sys/ipc.h>
 #include <sys/sem.h>
 #include <sys/shm.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #define IPC_MAX  20
 /* NOTICE: programs compiled using different values of IPC_MAX are not
 	fully compatable, since IPC_MAX is used in calculating the key
@@ -13,8 +15,9 @@
 /* GLOBAL DEFINITIONS */
 
 int semid;
+int IPC_KEY;
 
-#define IPC_KEY		getuid()
+//#define IPC_KEY		getuid()
 #define SEM_COUNTING         0
 #define SEM_CNT              0
 #define SEM_BINARY           1
@@ -25,7 +28,7 @@ int EZIPC_SHM_TRANS(int mid);
 int EZIPC_ERROR(char *string);
 int SHOW(int sid);
 int EZIPC_SEM_CALL(int sid,int op);
-char *EZIPC_SHM_ADDR(int mid);
+void *EZIPC_SHM_ADDR(int mid);
 void P(int sid);
 void V(int sid);
 int EZIPC_SEM_MAKE(int sid,int numsems);
@@ -34,8 +37,9 @@ void EZIPC_SEM_REMOVE();
 void EZIPC_SHM_REMOVE();
 int EZIPC_SHM_DET( char *addr);
 void SETUP();
+void SETUP_KEY(int key);
 int SEMAPHORE(int type, int value);
-char *SHARED_MEMORY(int size);
+void *SHARED_MEMORY(int size);
 int COBEGIN(int X);
 void COEND(int X);
 /*
@@ -115,13 +119,13 @@ int x;
 SHM_ADDR attachs and returns a pointer to the shared memory block mid.
 */
 
-char *EZIPC_SHM_ADDR(int mid)
+void *EZIPC_SHM_ADDR(int mid)
 
 {
 char *addr;
 // extern char *shmat();
 	addr=shmat(EZIPC_SHM_TRANS(mid),0,0);
-if ( (int)addr == -1 )
+if ( (uintptr_t)addr == -1 )
     {
        EZIPC_ERROR("EZIPC_SHM_ADDR Error:");
    }
@@ -234,6 +238,30 @@ void SETUP()
 {
 char *Maint_Block;
 int Child;
+IPC_KEY = getuid();
+
+	EZIPC_SHM_MAKE(0,2+IPC_MAX);
+	Maint_Block=EZIPC_SHM_ADDR(0);
+	*Maint_Block=1;
+	*(Maint_Block+1)=1;
+	semid = EZIPC_SEM_MAKE(0,1);
+	EZIPC_SEM_CALL(semid,1);
+	if((Child=fork())!=0)
+		{
+		wait(&Child);
+		EZIPC_SEM_REMOVE();
+		EZIPC_SHM_REMOVE();
+		exit(0);
+		}
+	EZIPC_SHM_DET(Maint_Block);
+ 		/* else continue running the program */
+}
+
+void SETUP_KEY(int key)
+{
+char *Maint_Block;
+int Child;
+IPC_KEY = key;
 
 	EZIPC_SHM_MAKE(0,2+IPC_MAX);
 	Maint_Block=EZIPC_SHM_ADDR(0);
@@ -301,11 +329,11 @@ SHARED_MEMORY creates a block of shared memory, and returns a pointer to the
 block of memory.
 */
 
-char *SHARED_MEMORY(int size)
+void *SHARED_MEMORY(int size)
 
 {
 int mid;
-char *addr;
+void *addr;
 char *Maint_Block;
 
 	EZIPC_SEM_CALL(0,-1);
