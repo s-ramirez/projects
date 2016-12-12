@@ -24,7 +24,7 @@
 #define MAX_SIZE 1024
 #define MSG_SIZE 1024 + sizeof(long int)
 #define BIG_NUM 2147483647
-#define MAX_SLEEP 50
+#define MAX_RAND 10
 
 /* Message types*/
 #define ACK 100
@@ -32,7 +32,7 @@
 #define REPLY 102
 #define CONF 103
 
-#define GET_SLEEP() ((rand() / (BIG_NUM/MAX_SLEEP)) + 1)
+#define GET_RAND() ((rand() / (BIG_NUM/MAX_RAND)) + 1)
 
 #define CHECK(x) \
   do { \

@@ -21,7 +21,6 @@ int main(int argc, char **argv)
     msg.req_num = 0;
     msg.type = 0;
 
-    //timer = GET_SLEEP();
     timer = 10;
     printf("Waiting %ds until next message...\n", timer);
     sleep(timer);

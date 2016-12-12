@@ -79,8 +79,7 @@ void request_handler(int k, int i) {
 }
 
 void printer_handler() {
-  int i;
-  printf("[*] I want to write\n");
+  int i, lines;
   P(mutex_sem);
     sharedmem[REQUEST_CS] = 1;
     sharedmem[REQ_NUM] = sharedmem[HIGHEST_REQ_NUM]++;
@@ -101,7 +100,14 @@ void printer_handler() {
   char buffer[MAX_SIZE];
   snprintf(buffer, sizeof(buffer), "### START OUTPUT FOR NODE %i ###", sharedmem[ME]);
   send_msg(PRINTER_QUEUE, printerq, REQUEST, buffer);
-  sleep(5);
+  lines = GET_RAND();
+  for (i = 1; i <= lines; i++) {
+    sleep(1);
+    memset(buffer,0,sizeof(buffer));
+    snprintf(buffer, sizeof(buffer), "This is node: %d with line number %d/%d", sharedmem[ME], i, lines);
+    send_msg(PRINTER_QUEUE, printerq, REQUEST, buffer);
+  }
+  sleep(1);
   memset(buffer,0,sizeof(buffer));
   snprintf(buffer, sizeof(buffer), "--- END OUTPUT FOR NODE %i ---", sharedmem[ME]);
   send_msg(PRINTER_QUEUE, printerq, REQUEST, buffer);
@@ -125,7 +131,7 @@ void reply_handler() {
 }
 
 int main(int argc, char *argv[]) {
-  int memid, status, timer;
+  int memid, status;
   pid_t pid = getpid();
 
   // Initialize EZIPC
@@ -296,10 +302,8 @@ int main(int argc, char *argv[]) {
         //Parent
         //Write every once in a while
         while (1) {
-          //timer = GET_SLEEP();
-          timer = 20;
-          printf("[*] Waiting %ds until trying to write...\n", timer);
-          sleep(timer);
+          printf("[*] Press enter to request CS...\n");
+          getchar();
           if(sharedmem[ACKS] == 0){
             printf("[*] Attempting to write...\n");
             P(nodes_sem);

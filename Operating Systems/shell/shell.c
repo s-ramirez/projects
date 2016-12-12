@@ -355,7 +355,7 @@ int read_input(char* line) {
 }
 
 void input_loop() {
-	int status;
+	int status = 1;
 	char *line = (char*) malloc(sizeof(char)*MAX_INPUT_SIZE);
 	struct Process *commands, *temp;
 	FILE *history_file;
@@ -394,24 +394,26 @@ void input_loop() {
 		read_input(line);
 		fflush(stdout);
 
-		// Check for commands from history
-		line = check_history(line);
+		if(strlen(line) != 0){
+			// Check for commands from history
+			line = check_history(line);
 
-		fprintf(history_file, "%s\n", line);
-		fflush(history_file);
-		read_history(history_file);
-		// Parse input
-		commands = process_input(line);
+			fprintf(history_file, "%s\n", line);
+			fflush(history_file);
+			read_history(history_file);
+			// Parse input
+			commands = process_input(line);
 
-		// Execute commands
-		status = execute_command(commands);
+			// Execute commands
+			status = execute_command(commands);
 
-		while(commands != NULL) {
-			temp = commands;
-			commands = commands->pipe;
+			while(commands != NULL) {
+				temp = commands;
+				commands = commands->pipe;
 
-			free(temp->args);
-			free(temp);
+				free(temp->args);
+				free(temp);
+			}
 		}
 	} while(status);
 	// Return the terminal's state to the original
