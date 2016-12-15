@@ -96,9 +96,11 @@ char* check_history(char* line) {
 			// Copy second half
 			for(i = found_pos+i; pos < strlen(line); pos++ && i++)
 				tmp[i] = line[pos];
+			tmp[pos] = '\0';
 			return tmp;
 		}
 	}
+	line[pos] = '\0';
 	return line;
 }
 
