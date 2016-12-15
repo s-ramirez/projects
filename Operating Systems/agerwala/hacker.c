@@ -21,9 +21,8 @@ int main(int argc, char **argv)
     msg.req_num = 0;
     msg.type = 0;
 
-    timer = 10;
-    printf("Waiting %ds until next message...\n", timer);
-    sleep(timer);
+    printf("[*] Press enter to request send a message...\n");
+    getchar();
 
     /* user input */
     //memset(buffer, 0, MAX_SIZE);

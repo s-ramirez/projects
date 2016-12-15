@@ -12,6 +12,14 @@
 #define REPLY_DEFFERED 200 /* Reply_deferred[i] is true when node defers reply to node i */
 #define ACKS 300
 
+volatile int terminate = 0;
+
+void sigkill(int p)
+{
+    terminate = 1;
+    signal(SIGINT, &sigkill);
+}
+
 // Concat two strings
 char* concat(const char *s1, const char *s2)
 {
@@ -28,7 +36,7 @@ int open_queue(int id){
   return msgget(key, IPC_CREAT | 0660);
 }
 
-int *sharedmem, mutex_sem, wait_sem, nodes_sem, replyq, requestq, printerq;
+int *sharedmem, mutex_sem, nodes_sem, wait_sem, replyq, requestq, printerq;
 
 int get_node(int id) {
   int j;
@@ -95,6 +103,7 @@ void printer_handler() {
   printf("\t> Waiting for permission... \n");
   while(sharedmem[OUTSTANDING_REPLY] != 0)
     P(wait_sem);
+
   printf("\t> Permission obtained! Writing... \n");
   // CRITICAL SECTION
   char buffer[MAX_SIZE];
@@ -135,7 +144,8 @@ int main(int argc, char *argv[]) {
   pid_t pid = getpid();
 
   // Initialize EZIPC
-  SETUP();
+  SETUP_KEY((int)pid);
+  signal(SIGINT,&sigkill);
 
   if(argc < 2) {
     printf("One argument expected: <node_number>\n");
@@ -193,7 +203,7 @@ int main(int argc, char *argv[]) {
     sharedmem[N] = i + 1;
     token = strtok(NULL, " ");
     sscanf(token, "%d", &i);
-    sharedmem[HIGHEST_REQ_NUM] = i;
+    sharedmem[HIGHEST_REQ_NUM] = i-1;
 
     i = 1;
     token = strtok(NULL, " ");
@@ -222,21 +232,26 @@ int main(int argc, char *argv[]) {
     // In child first child process
     // Monitor request queue
     printf("[*] Request process ready\n");
-    while(1) {
+    while(!terminate) {
       status = msgrcv(requestq, &mrecv, MSG_SIZE, sharedmem[ME], 0);
-      CHECK(status != -1);
+      if(status == -1) {
+        break;
+      }
+
       printf("[*] Received request from node %d...\n", mrecv.msg_fm);
       switch(mrecv.type) {
         case ACK:
-          printf("[*] Acknowledged node: %s\n", mrecv.content);
           P(nodes_sem);
+            printf("[*] Acknowledged node: %s\n", mrecv.content);
             sharedmem[NODES + sharedmem[N]] = atoi(mrecv.content);
             sharedmem[N]++;
+            send_msg(mrecv.msg_fm, replyq, CONF, "");
           V(nodes_sem);
-          send_msg(mrecv.msg_fm, replyq, CONF, "");
         break;
         default:
-          request_handler(mrecv.req_num, mrecv.msg_fm);
+          P(nodes_sem);
+            request_handler(mrecv.req_num, mrecv.msg_fm);
+          V(nodes_sem);
         break;
       }
     }
@@ -249,9 +264,11 @@ int main(int argc, char *argv[]) {
     if(reply_proc == 0) {
       //Monitor reply queue
       printf("[*] Reply process ready\n");
-      while(1) {
+      while(!terminate) {
         status = msgrcv(replyq, &mrecv, MSG_SIZE, sharedmem[ME], 0);
-        CHECK(status != -1);
+        if(status == -1) {
+          break;
+        }
 
         switch(mrecv.type) {
           case CONF:
@@ -277,9 +294,11 @@ int main(int argc, char *argv[]) {
       if(broadcast_proc){
         //Monitor request queue for broadcast messages
         printf("[*] Broadcast process ready\n");
-        while(1) {
+        while(!terminate) {
           status = msgrcv(requestq, &mrecv, MSG_SIZE, ACK, 0);
-          CHECK(status != -1);
+          if(status == -1) {
+            break;
+          }
           if(mrecv.msg_fm != sharedmem[ME]){
             P(nodes_sem);
               printf("\t> A new node with id: %d has entered, sponsoring...\n", mrecv.msg_fm);
@@ -301,21 +320,25 @@ int main(int argc, char *argv[]) {
       } else {
         //Parent
         //Write every once in a while
-        while (1) {
-          printf("[*] Press enter to request CS...\n");
-          getchar();
+        while (!terminate) {
           if(sharedmem[ACKS] == 0){
-            printf("[*] Attempting to write...\n");
-            P(nodes_sem);
-              printer_handler();
-            V(nodes_sem);
+            printf("[*] Press enter to request CS...\n");
+            getchar();
+            if(!terminate) {
+              printf("[*] Attempting to write...\n");
+              P(nodes_sem);
+                printer_handler();
+              V(nodes_sem);
+            }
           }
         }
+        printf("[*] Exiting ...\n");
+        /* Remove shared memory and semaphores*/
+        EZIPC_SEM_REMOVE();
+        shmctl(memid, IPC_RMID, (struct shmid_ds *) 0);
+        return 0;
       }
     }
   }
-
-  /* Remove shared memory */
-  shmctl(memid, IPC_RMID, (struct shmid_ds *) 0);
   return 0;
 }

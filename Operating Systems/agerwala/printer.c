@@ -1,5 +1,13 @@
 #include "common.h"
 
+volatile int terminate = 0;
+
+void sigkill(int p)
+{
+    terminate = 1;
+    signal(SIGINT, &sigkill);
+}
+
 int create_queue(int id) {
   key_t key = ftok(".", id);
   return msgget(key, IPC_CREAT | 0660);
@@ -19,13 +27,17 @@ int main(int argc, char **argv)
     CHECK(requestq != -1);
     replyq = create_queue(REPLY_QUEUE);
     CHECK(replyq != -1);
+    signal(SIGINT,&sigkill);
 
     printf("Starting printer service...\n");
-    while(1){
+    while(!terminate){
 
       /* receive the message */
       status = msgrcv(printerq, &mrecv, MSG_SIZE, PRINTER_QUEUE, 0);
-      CHECK(status != -1);
+      if(status == -1) {
+        printf("Exiting...\n");
+        break;
+      }
 
       printf("%s\n", mrecv.content);
     }
